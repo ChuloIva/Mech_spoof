@@ -187,6 +187,11 @@ class GenericChatTemplate(TemplateAdapter):
     ) -> PromptBundle:
         text = self.tok.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
         ids = self.tok.apply_chat_template(messages, tokenize=True, add_generation_prompt=True)
+        # Newer tokenizers may return a BatchEncoding/dict when tokenize=True
+        if hasattr(ids, "input_ids"):
+            ids = ids.input_ids
+        elif isinstance(ids, dict) and "input_ids" in ids:
+            ids = ids["input_ids"]
         if hasattr(ids, "tolist"):  # torch.Tensor
             ids = ids.tolist()
         if isinstance(ids, list) and ids and isinstance(ids[0], list):
