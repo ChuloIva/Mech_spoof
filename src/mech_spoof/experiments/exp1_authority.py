@@ -15,7 +15,7 @@ from pathlib import Path
 
 import numpy as np
 
-from mech_spoof.activations import extract_at_positions, response_first_position
+from mech_spoof.activations import extract_at_last_token_batched
 from mech_spoof.configs import MODEL_CONFIGS
 from mech_spoof.datasets.structural import build_structural_contrastive
 from mech_spoof.io import save_result_bundle, save_pickle
@@ -52,6 +52,8 @@ def run_experiment_1(
     seed: int = 42,
     free_after: bool = True,
     cache_activations: bool = True,
+    batch_size: int = 8,
+    max_length: int = 512,
 ) -> Exp1Result:
     """Run Experiment 1 end-to-end for one model."""
     set_seed(seed)
@@ -71,13 +73,15 @@ def run_experiment_1(
     cache_s = out_dir / "act_cache_system" if cache_activations else None
     cache_u = out_dir / "act_cache_user" if cache_activations else None
 
-    with timer(f"[{model_key}] extract S activations"):
-        sys_acts = extract_at_positions(
-            loaded, ds.prompts_system, response_first_position, cache_dir=cache_s
+    with timer(f"[{model_key}] extract S activations (bs={batch_size})"):
+        sys_acts = extract_at_last_token_batched(
+            loaded, ds.prompts_system,
+            batch_size=batch_size, max_length=max_length, cache_dir=cache_s,
         )
-    with timer(f"[{model_key}] extract U activations"):
-        user_acts = extract_at_positions(
-            loaded, ds.prompts_user, response_first_position, cache_dir=cache_u
+    with timer(f"[{model_key}] extract U activations (bs={batch_size})"):
+        user_acts = extract_at_last_token_batched(
+            loaded, ds.prompts_user,
+            batch_size=batch_size, max_length=max_length, cache_dir=cache_u,
         )
 
     # Train probes + diff-in-means

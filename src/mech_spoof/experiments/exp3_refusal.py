@@ -61,6 +61,9 @@ def run_experiment_3(
     free_after: bool = True,
     n_harmful: int | None = None,
     n_harmless: int | None = None,
+    batch_size: int = 8,
+    max_length: int = 512,
+    cache_activations: bool = False,
 ) -> Exp3Result:
     """Compute refusal direction via OBLITERATUS-style method and measure geometry vs authority.
 
@@ -104,8 +107,10 @@ def run_experiment_3(
             harmless=harmless_list,
             wrap_mode=wrap_mode,
             source=source,
-            cache_dir=out_dir / "act_cache_refusal",
+            cache_dir=(out_dir / "act_cache_refusal") if cache_activations else None,
             select_strong_layers=True,
+            batch_size=batch_size,
+            max_length=max_length,
         )
 
     best_authority, auth_dirs = _load_exp1_authority_dirs(exp1_dir)

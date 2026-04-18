@@ -60,6 +60,13 @@ drive.mount("/content/drive")
 
 **Refusal-direction method**: Exp 3 uses the OBLITERATUS prompt corpus (`source="builtin"` → 512 curated harmful/harmless pairs) and the Arditi-style diff-of-means at the last raw token by default (`wrap_mode="raw"`). Results are directly comparable with OBLITERATUS's abliteration pipeline. Other sources (`advbench`, `harmbench`, `anthropic_redteam`, `wildjailbreak`) and chat-template wrapping (`wrap_mode="chat"`) are available via `run_experiment_3` keyword args. The third-party OBLITERATUS checkout lives at `third_party/OBLITERATUS/` (AGPL-3.0).
 
+**GPU batching**: Both Exp 1 (authority) and Exp 3 (refusal) extract activations via a batched GPU path with left-padding. Forward passes are batched (`batch_size=8` default), per-layer means accumulate on-device, and only the final `(n_layers, d_model)` direction tensor is copied to CPU. Tune `batch_size` per VRAM:
+- A100 40 GB on a 7-9 B bf16 model → `batch_size=16–32`
+- T4 16 GB → `batch_size=4–8`
+- Local 12 GB (gemma 4 E4B 4-bit or small models) → `batch_size=2–4`
+
+Pass via: `run_experiment_1(MODEL_KEY, OUT_DIR, batch_size=16)` / `run_experiment_3(..., batch_size=16)`.
+
 ## Models
 
 Five instruct models covering four delimiter philosophies. Local box only runs `gemma_small` (gemma-2-2b-it); everything else is Colab-only.

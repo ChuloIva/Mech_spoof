@@ -15,7 +15,10 @@ from typing import Literal
 
 import numpy as np
 
-from mech_spoof.activations import extract_at_positions, response_first_position
+from mech_spoof.activations import (
+    accumulate_last_token_means,
+    extract_at_last_token_batched,
+)
 from mech_spoof.models import LoadedModel
 from mech_spoof.templates.base import PromptBundle
 
@@ -78,25 +81,37 @@ def compute_refusal_direction(
     source: str | None = None,
     cache_dir: Path | None = None,
     select_strong_layers: bool = True,
+    batch_size: int = 8,
+    max_length: int | None = 512,
 ) -> RefusalResult:
-    """Compute per-layer refusal directions via difference-in-means.
+    """Compute per-layer refusal directions via difference-in-means on GPU.
+
+    Streaming GPU-resident accumulator: forward passes are batched, per-layer sums accumulate
+    on-device, diff-of-means + normalization happen on-device, and only the final per-layer
+    unit-direction tensors are copied to CPU at the end. No (n_prompts, n_layers, d_model)
+    buffer is allocated. VRAM cost ≈ one batch's residual stream + (n_layers, d_model).
 
     Parameters
     ----------
     harmful, harmless : list[str], optional
-        Provide your own prompt lists. If omitted and `source` is given (or defaults to
-        "builtin"), pulls from OBLITERATUS.
+        Provide your own prompt lists. If omitted, pulls from OBLITERATUS `source`.
     wrap_mode : "raw" | "chat"
         "raw"  — tokenize as-is, read last token. OBLITERATUS default.
-        "chat" — apply the model's chat template as a user turn. More realistic for instruct
-                 models but not directly comparable with Arditi/OBLITERATUS results.
+        "chat" — wrap via the model's chat template. Not directly comparable with Arditi/OBLITERATUS.
     source : str, optional
         One of "builtin" | "advbench" | "harmbench" | "anthropic_redteam" | "wildjailbreak".
-        Ignored if `harmful` and `harmless` are both provided.
+    batch_size : int
+        Forward-pass batch size. A100 / 7-9B bf16: start at 16-32. T4: 4-8. 12 GB local: 2-4.
+    max_length : int, optional
+        Truncate prompts beyond this many tokens (default 512). `None` disables truncation.
+    cache_dir : Path, optional
+        If set, switches to a per-prompt buffered path (`extract_at_last_token_batched`) that
+        saves each prompt's (n_layers, d_model) vector to disk. Slower but resumable.
     select_strong_layers : bool
-        If True, run OBLITERATUS's knee+COSMIC layer selection and populate
-        `result.strong_layers`.
+        Run knee+COSMIC layer selection (§OBLITERATUS) and populate `result.strong_layers`.
     """
+    import torch
+
     from mech_spoof.obliteratus_compat import knee_cosmic_layer_selection, load_prompt_pairs
 
     if harmful is None or harmless is None:
@@ -110,30 +125,58 @@ def compute_refusal_direction(
     bundles_harmful = _build_bundles(loaded, list(harmful), wrap_mode)
     bundles_harmless = _build_bundles(loaded, list(harmless), wrap_mode)
 
-    def positions_fn(_loaded, bundle):
-        return bundle.response_first_pos
+    if cache_dir is not None:
+        # Per-prompt disk-cached path.
+        cache_h = Path(cache_dir) / "harmful"
+        cache_s = Path(cache_dir) / "harmless"
+        harmful_acts = extract_at_last_token_batched(
+            loaded, bundles_harmful,
+            batch_size=batch_size, max_length=max_length, cache_dir=cache_h,
+        )
+        harmless_acts = extract_at_last_token_batched(
+            loaded, bundles_harmless,
+            batch_size=batch_size, max_length=max_length, cache_dir=cache_s,
+        )
+        n_layers = harmful_acts.shape[1]
+        directions: dict[int, np.ndarray] = {}
+        norms: dict[int, float] = {}
+        h_means: dict[int, np.ndarray] = {}
+        l_means: dict[int, np.ndarray] = {}
+        for layer in range(n_layers):
+            mh = harmful_acts[:, layer, :].mean(axis=0)
+            ml = harmless_acts[:, layer, :].mean(axis=0)
+            diff = mh - ml
+            n = float(np.linalg.norm(diff))
+            norms[layer] = n
+            directions[layer] = diff / (n + 1e-8)
+            h_means[layer] = mh
+            l_means[layer] = ml
+    else:
+        # Streaming GPU-resident path — faster, no CPU buffer.
+        h_mean_tensor, _ = accumulate_last_token_means(
+            loaded, bundles_harmful, batch_size=batch_size, max_length=max_length,
+        )  # (n_layers, d_model) on device
+        l_mean_tensor, _ = accumulate_last_token_means(
+            loaded, bundles_harmless, batch_size=batch_size, max_length=max_length,
+        )
+        diff_tensor = h_mean_tensor - l_mean_tensor              # (n_layers, d_model) on device
+        norm_tensor = diff_tensor.norm(dim=-1)                   # (n_layers,)
+        dir_tensor = diff_tensor / (norm_tensor.unsqueeze(-1) + 1e-8)  # on device
 
-    cache_h = Path(cache_dir) / "harmful" if cache_dir else None
-    cache_s = Path(cache_dir) / "harmless" if cache_dir else None
+        h_means_np = h_mean_tensor.cpu().numpy()
+        l_means_np = l_mean_tensor.cpu().numpy()
+        dirs_np = dir_tensor.cpu().numpy()
+        norms_np = norm_tensor.cpu().numpy()
 
-    harmful_acts = extract_at_positions(loaded, bundles_harmful, positions_fn, cache_dir=cache_h)
-    harmless_acts = extract_at_positions(loaded, bundles_harmless, positions_fn, cache_dir=cache_s)
+        n_layers = dirs_np.shape[0]
+        directions = {l: dirs_np[l] for l in range(n_layers)}
+        norms = {l: float(norms_np[l]) for l in range(n_layers)}
+        h_means = {l: h_means_np[l] for l in range(n_layers)}
+        l_means = {l: l_means_np[l] for l in range(n_layers)}
 
-    n_layers = harmful_acts.shape[1]
-    directions: dict[int, np.ndarray] = {}
-    norms: dict[int, float] = {}
-    h_means: dict[int, np.ndarray] = {}
-    l_means: dict[int, np.ndarray] = {}
-
-    for layer in range(n_layers):
-        mh = harmful_acts[:, layer, :].mean(axis=0)
-        ml = harmless_acts[:, layer, :].mean(axis=0)
-        diff = mh - ml
-        n = float(np.linalg.norm(diff))
-        norms[layer] = n
-        directions[layer] = diff / (n + 1e-8)
-        h_means[layer] = mh
-        l_means[layer] = ml
+        del h_mean_tensor, l_mean_tensor, diff_tensor, dir_tensor, norm_tensor
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
     strong: list[int] = []
     if select_strong_layers:
