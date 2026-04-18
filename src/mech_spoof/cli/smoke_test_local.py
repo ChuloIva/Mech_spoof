@@ -1,7 +1,7 @@
-"""Local smoke test: run an experiment on gemma-2-2b-it (fits on a 12 GB ROCm GPU).
+"""Local smoke test: run an experiment on the default qwen model (Qwen3.5-4B).
 
 Validates the whole pipeline — model loading, template adapter, activation extraction, probe
-training — before spending Colab credits on the 7-9B runs.
+training — before spending Colab credits on the larger runs.
 """
 
 from __future__ import annotations
@@ -11,9 +11,9 @@ from pathlib import Path
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Local smoke test (gemma-2-2b-it).")
-    parser.add_argument("--model", default="gemma_small",
-                        help="MODEL_CONFIGS key (default: gemma_small = gemma-2-2b-it)")
+    parser = argparse.ArgumentParser(description="Local smoke test (Qwen3.5-4B).")
+    parser.add_argument("--model", default="qwen",
+                        help="MODEL_CONFIGS key (default: qwen = Qwen/Qwen3.5-4B)")
     parser.add_argument("--experiment", type=int, default=1, choices=[1, 2, 3])
     parser.add_argument("--out", type=Path, default=Path("results_smoke"))
     parser.add_argument("--n-instructions", type=int, default=10,

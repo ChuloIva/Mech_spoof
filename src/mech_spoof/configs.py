@@ -41,9 +41,9 @@ class ModelConfig:
 MODEL_CONFIGS: dict[str, ModelConfig] = {
     "qwen": ModelConfig(
         key="qwen",
-        hf_id="Qwen/Qwen2.5-7B-Instruct",
+        hf_id="Qwen/Qwen3.5-4B",
         template="chatml",
-        slug="qwen25_7b",
+        slug="qwen35_4b",
         dtype="bfloat16",
     ),
     "llama3": ModelConfig(

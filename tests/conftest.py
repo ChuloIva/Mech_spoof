@@ -25,7 +25,7 @@ def hf_tokenizer_qwen():
         pytest.skip("offline mode")
     from transformers import AutoTokenizer
     try:
-        return AutoTokenizer.from_pretrained("Qwen/Qwen2.5-7B-Instruct")
+        return AutoTokenizer.from_pretrained("Qwen/Qwen3.5-4B")
     except Exception as e:
         pytest.skip(f"could not load Qwen tokenizer: {e}")
 

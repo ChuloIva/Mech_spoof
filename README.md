@@ -38,7 +38,7 @@ drive.mount("/content/drive")
    - **vLLM (default, no API cost)** — open `notebooks/build_datasets.ipynb` on Colab (A100 or T4) and Run All. Generated JSONs land in `data/`.
    - **Claude API** — `ms-build-datasets --backend claude` (needs `ANTHROPIC_API_KEY`).
    - CLI: `ms-build-datasets --backend vllm --model Qwen/Qwen2.5-7B-Instruct`
-2. Local smoke test (gemma-2-2b, fits on 12 GB):
+2. Local smoke test (Qwen3.5-4B, fits on 12 GB):
    ```bash
    ms-smoke --experiment 1
    ```
@@ -73,7 +73,7 @@ Five instruct models covering four delimiter philosophies. Local box only runs `
 
 | Key | HF ID | Template |
 |---|---|---|
-| `qwen` | `Qwen/Qwen2.5-7B-Instruct` | ChatML |
+| `qwen` | `Qwen/Qwen3.5-4B` | ChatML |
 | `llama3` | `meta-llama/Llama-3.1-8B-Instruct` | Llama-3 headers |
 | `mistral` | `mistralai/Mistral-7B-Instruct-v0.3` | `[INST]` |
 | `gemma` | `google/gemma-2-9b-it` | `<start_of_turn>` |
