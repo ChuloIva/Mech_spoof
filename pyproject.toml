@@ -1,0 +1,60 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mech_spoof"
+version = "0.1.0"
+description = "Mechanistic interpretability of instruction privilege in LLMs"
+readme = "README.md"
+requires-python = ">=3.10,<3.13"
+license = {text = "MIT"}
+authors = [{name = "mech_spoof"}]
+
+dependencies = [
+    "torch>=2.3",
+    "transformers>=4.44",
+    "nnsight>=0.3",
+    "accelerate>=0.33",
+    "safetensors>=0.4",
+    "scikit-learn>=1.4",
+    "scipy>=1.11",
+    "numpy>=1.26,<2.2",
+    "pandas>=2.2",
+    "matplotlib>=3.8",
+    "langdetect>=1.0.9",
+    "tqdm>=4.66",
+    "anthropic>=0.39",
+    "python-dotenv>=1.0",
+    "requests>=2.31",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-xdist", "ruff", "mypy", "ipykernel"]
+colab = []
+
+[project.scripts]
+ms-build-datasets = "mech_spoof.cli.build_datasets:main"
+ms-run = "mech_spoof.cli.run_experiment:main"
+ms-aggregate = "mech_spoof.cli.aggregate_results:main"
+ms-smoke = "mech_spoof.cli.smoke_test_local:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --strict-markers"
+markers = [
+    "slow: deselect with '-m \"not slow\"'",
+    "gpu: requires GPU",
+    "network: requires network",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = ["E501"]
