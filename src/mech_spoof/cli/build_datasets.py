@@ -1,6 +1,10 @@
-"""Build or refresh the committed dataset JSONs via the Claude API.
+"""Build or refresh the committed dataset JSONs.
 
-Reads seed data, calls Claude to expand each category to the target count, writes
+Two backends:
+- vllm   — default; runs a local HF instruct model via vLLM (Colab-friendly, no API bills)
+- claude — uses the Anthropic API (needs ANTHROPIC_API_KEY)
+
+Reads seed data, expands each category to the target count, writes
 `data/structural/instructions_<cat>.json` and `data/conflicting_pairs.json`.
 """
 
@@ -17,7 +21,6 @@ from mech_spoof.configs import (
     STRUCTURAL_CATEGORIES,
     STRUCTURAL_N_PER_CATEGORY,
 )
-from mech_spoof.datasets._claude_gen import generate_conflict_pairs, generate_instructions
 from mech_spoof.datasets.advbench import load_advbench
 from mech_spoof.datasets.harmless import write_harmless_json
 from mech_spoof.datasets.structural import _load_seeds
@@ -26,9 +29,32 @@ from mech_spoof.utils import get_logger
 logger = get_logger(__name__)
 
 
-def _expand_structural(target_per_category: int, model: str):
-    seeds = _load_seeds(DATA_DIR)
-    out_dir = DATA_DIR / "structural"
+_DEFAULT_MODELS = {
+    "vllm": "Qwen/Qwen2.5-7B-Instruct",
+    "claude": "claude-sonnet-4-6",
+}
+
+
+def _pick_generator(backend: str):
+    if backend == "vllm":
+        from mech_spoof.datasets import _vllm_gen as gen
+    elif backend == "claude":
+        from mech_spoof.datasets import _claude_gen as gen
+    else:
+        raise ValueError(f"Unknown backend {backend!r}. Use 'vllm' or 'claude'.")
+    return gen
+
+
+def expand_structural(
+    target_per_category: int,
+    backend: str,
+    model: str,
+    data_dir: Path = DATA_DIR,
+    engine_kwargs: dict | None = None,
+) -> None:
+    gen = _pick_generator(backend)
+    seeds = _load_seeds(data_dir)
+    out_dir = data_dir / "structural"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     for cat in STRUCTURAL_CATEGORIES:
@@ -37,7 +63,8 @@ def _expand_structural(target_per_category: int, model: str):
         if need == 0:
             items = have[:target_per_category]
         else:
-            new = generate_instructions(cat, have, n=need, model=model)
+            kwargs = {"engine_kwargs": engine_kwargs} if backend == "vllm" else {}
+            new = gen.generate_instructions(cat, have, n=need, model=model, **kwargs)
             items = list(dict.fromkeys(have + new))[:target_per_category]
         out_path = out_dir / f"instructions_{cat}.json"
         with open(out_path, "w") as f:
@@ -45,8 +72,15 @@ def _expand_structural(target_per_category: int, model: str):
         logger.info(f"[{cat}] wrote {len(items)} items -> {out_path}")
 
 
-def _expand_conflicts(target_count: int, model: str):
-    seed_path = DATA_DIR / "conflicting_pairs_seed.json"
+def expand_conflicts(
+    target_count: int,
+    backend: str,
+    model: str,
+    data_dir: Path = DATA_DIR,
+    engine_kwargs: dict | None = None,
+) -> None:
+    gen = _pick_generator(backend)
+    seed_path = data_dir / "conflicting_pairs_seed.json"
     if not seed_path.exists():
         raise FileNotFoundError(f"Missing {seed_path}")
     with open(seed_path) as f:
@@ -77,11 +111,12 @@ def _expand_conflicts(target_count: int, model: str):
         if need == 0:
             out_pairs.extend(have[:target])
             continue
-        new = generate_conflict_pairs(
+        kwargs = {"engine_kwargs": engine_kwargs} if backend == "vllm" else {}
+        new = gen.generate_conflict_pairs(
             category=cat, eval_type=eval_for_cat[cat],
             allowed_evals=allowed_evals, examples=have, n=need, model=model,
+            **kwargs,
         )
-        # Assign ids if missing
         for i, p in enumerate(new, start=len(have) + 1):
             p.setdefault("id", f"{cat[:4]}_{i:02d}")
             p.setdefault("category", cat)
@@ -89,7 +124,7 @@ def _expand_conflicts(target_count: int, model: str):
         combined = have + new
         out_pairs.extend(combined[:target])
 
-    out_path = DATA_DIR / "conflicting_pairs.json"
+    out_path = data_dir / "conflicting_pairs.json"
     with open(out_path, "w") as f:
         json.dump(out_pairs, f, indent=2)
     logger.info(f"wrote {len(out_pairs)} conflict pairs -> {out_path}")
@@ -97,26 +132,49 @@ def _expand_conflicts(target_count: int, model: str):
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--backend", choices=["vllm", "claude"], default="vllm")
+    parser.add_argument("--model", default=None,
+                        help="HF model id (vllm) or Anthropic model name (claude). "
+                             "Defaults per backend.")
     parser.add_argument("--structural-n", type=int, default=STRUCTURAL_N_PER_CATEGORY)
     parser.add_argument("--conflict-n", type=int, default=CONFLICT_PAIRS_COUNT)
-    parser.add_argument("--model", default="claude-sonnet-4-6")
+    parser.add_argument("--data-dir", type=Path, default=DATA_DIR)
     parser.add_argument("--skip-structural", action="store_true")
     parser.add_argument("--skip-conflicts", action="store_true")
     parser.add_argument("--skip-advbench", action="store_true")
+    parser.add_argument("--vllm-max-model-len", type=int, default=4096,
+                        help="vLLM engine max_model_len")
+    parser.add_argument("--vllm-gpu-mem", type=float, default=0.90,
+                        help="vLLM engine gpu_memory_utilization")
     args = parser.parse_args(argv)
 
+    model = args.model or _DEFAULT_MODELS[args.backend]
+    engine_kwargs = None
+    if args.backend == "vllm":
+        engine_kwargs = {
+            "max_model_len": args.vllm_max_model_len,
+            "gpu_memory_utilization": args.vllm_gpu_mem,
+        }
+
     if not args.skip_structural:
-        _expand_structural(args.structural_n, args.model)
+        expand_structural(args.structural_n, args.backend, model,
+                          data_dir=args.data_dir, engine_kwargs=engine_kwargs)
 
     if not args.skip_conflicts:
-        _expand_conflicts(args.conflict_n, args.model)
+        expand_conflicts(args.conflict_n, args.backend, model,
+                         data_dir=args.data_dir, engine_kwargs=engine_kwargs)
 
     if not args.skip_advbench:
         goals = load_advbench()
         logger.info(f"AdvBench: {len(goals)} harmful goals cached.")
 
-    harmless_path = write_harmless_json(DATA_DIR)
+    harmless_path = write_harmless_json(args.data_dir)
     logger.info(f"harmless set -> {harmless_path}")
+
+    if args.backend == "vllm":
+        from mech_spoof.datasets._vllm_gen import free_llm
+        free_llm()
+
     return 0
 
 

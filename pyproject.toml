@@ -32,6 +32,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=8", "pytest-xdist", "ruff", "mypy", "ipykernel"]
 colab = []
+vllm = ["vllm>=0.6"]
 
 [project.scripts]
 ms-build-datasets = "mech_spoof.cli.build_datasets:main"

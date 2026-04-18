@@ -34,10 +34,10 @@ drive.mount("/content/drive")
 
 ## Quick start
 
-1. Build datasets once (needs `ANTHROPIC_API_KEY`):
-   ```bash
-   ms-build-datasets
-   ```
+1. Build datasets once. Two options:
+   - **vLLM (default, no API cost)** — open `notebooks/build_datasets.ipynb` on Colab (A100 or T4) and Run All. Generated JSONs land in `data/`.
+   - **Claude API** — `ms-build-datasets --backend claude` (needs `ANTHROPIC_API_KEY`).
+   - CLI: `ms-build-datasets --backend vllm --model Qwen/Qwen2.5-7B-Instruct`
 2. Local smoke test (gemma-2-2b, fits on 12 GB):
    ```bash
    ms-smoke --experiment 1
