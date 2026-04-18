@@ -16,7 +16,7 @@ cp .env.example .env  # fill in ANTHROPIC_API_KEY, HF_TOKEN
 ## Install (Google Colab)
 
 ```python
-!pip install -q git+https://github.com/<your-user>/mech_spoof.git
+!pip install -q git+https://github.com/ChuloIva/Mech_spoof.git
 from google.colab import userdata, drive
 import os
 os.environ["HF_TOKEN"] = userdata.get("HF_TOKEN")
@@ -69,4 +69,4 @@ Five instruct models covering four delimiter philosophies. Local box only runs `
 | `mistral` | `mistralai/Mistral-7B-Instruct-v0.3` | `[INST]` |
 | `gemma` | `google/gemma-2-9b-it` | `<start_of_turn>` |
 | `phi3` | `microsoft/Phi-3.5-mini-instruct` | `<|system|>` |
-| `gemma_small` | `google/gemma-2-2b-it` | `<start_of_turn>` (local smoke only) |
+| `gemma_small` | `google/gemma-4-E4B-it` | `<\|turn>` (smoke-test; ~8B bf16 → needs Colab T4+ or 4-bit local) |

@@ -74,14 +74,21 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         slug="phi35_mini",
         dtype="bfloat16",
     ),
-    # Local smoke-test only (fits on 12 GB ROCm)
+    # Smoke-test model. Not fitting in 12 GB bf16 locally — plan is Colab T4/A100 or
+    # 4-bit local (bitsandbytes) for quick pipeline validation. Quantization distorts
+    # activations so only use this for smoke-testing, not for headline results.
     "gemma_small": ModelConfig(
         key="gemma_small",
-        hf_id="google/gemma-2-2b-it",
-        template="gemma",
-        slug="gemma2_2b",
-        dtype="float16",
-        notes="Local smoke-test model — too small for headline results.",
+        hf_id="google/gemma-4-E4B-it",
+        template="gemma4",
+        slug="gemma4_e4b",
+        dtype="bfloat16",
+        notes=(
+            "Gemma 4 E4B-it — 4.5B effective / ~8B total params. bf16 needs ~16 GB; "
+            "use 4-bit (bitsandbytes) for 12 GB local or run on Colab T4+. "
+            "New chat-template format uses <|turn> / <turn|> delimiters (not Gemma 2's "
+            "<start_of_turn> / <end_of_turn>)."
+        ),
     ),
 }
 
