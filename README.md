@@ -58,6 +58,8 @@ drive.mount("/content/drive")
 | 4 | Attack evaluation + token trace | `experiments.exp4_attacks` | exp1, exp3 |
 | 5 | Cross-model comparative | `experiments.exp5_comparative` | exp1-4 × all models |
 
+**Refusal-direction method**: Exp 3 uses the OBLITERATUS prompt corpus (`source="builtin"` → 512 curated harmful/harmless pairs) and the Arditi-style diff-of-means at the last raw token by default (`wrap_mode="raw"`). Results are directly comparable with OBLITERATUS's abliteration pipeline. Other sources (`advbench`, `harmbench`, `anthropic_redteam`, `wildjailbreak`) and chat-template wrapping (`wrap_mode="chat"`) are available via `run_experiment_3` keyword args. The third-party OBLITERATUS checkout lives at `third_party/OBLITERATUS/` (AGPL-3.0).
+
 ## Models
 
 Five instruct models covering four delimiter philosophies. Local box only runs `gemma_small` (gemma-2-2b-it); everything else is Colab-only.
