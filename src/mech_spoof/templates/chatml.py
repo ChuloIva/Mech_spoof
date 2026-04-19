@@ -7,6 +7,7 @@ from mech_spoof.templates._common import GenericChatTemplate
 
 class ChatMLAdapter(GenericChatTemplate):
     name = "chatml"
+    _supports_enable_thinking = True
 
     _delims = {
         "im_start": "<|im_start|>",

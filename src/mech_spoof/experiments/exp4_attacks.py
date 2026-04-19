@@ -62,8 +62,13 @@ def _residual_at_position(loaded, input_ids, layer: int, position: int) -> np.nd
 def _wrap_payload_as_user_prompt(loaded, payload_text: str) -> list[int]:
     """Wrap an attack payload string as a user turn and tokenize."""
     messages = [{"role": "user", "content": payload_text}]
+    extra = (
+        {"enable_thinking": False}
+        if getattr(loaded.template, "_supports_enable_thinking", False)
+        else {}
+    )
     ids = loaded.tokenizer.apply_chat_template(
-        messages, tokenize=True, add_generation_prompt=True, enable_thinking=False
+        messages, tokenize=True, add_generation_prompt=True, **extra
     )
     if hasattr(ids, "tolist"):
         ids = ids.tolist()

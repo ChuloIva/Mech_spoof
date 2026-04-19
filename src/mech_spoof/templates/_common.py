@@ -34,6 +34,9 @@ class GenericChatTemplate(TemplateAdapter):
     # Subclass may set True when the tokenizer is known to refuse a `system` role entry;
     # in that case make_system_prompt will merge system content into the first user turn manually.
     _system_role_supported: bool = True
+    # Qwen3/Qwen3.5 accept `enable_thinking` as a chat-template kwarg; other tokenizers'
+    # Jinja templates may warn or error on unknown kwargs, so opt in per adapter.
+    _supports_enable_thinking: bool = False
 
     # ---------- Core prompt builders ----------
 
@@ -227,14 +230,14 @@ class GenericChatTemplate(TemplateAdapter):
         instruction_for_location: str,
         condition: Literal["S", "U", "REAL", "NONE", "FAKE"],
     ) -> PromptBundle:
-        # enable_thinking=False is Qwen3/Qwen3.5's hard switch to skip the <think> block
-        # (and the informal "Thinking Process:" chatter Qwen3.5-4B emits by default). Other
-        # tokenizers' Jinja templates silently ignore unknown kwargs, so this is safe globally.
+        # Qwen3/Qwen3.5 hard switch to skip the <think> block and the informal
+        # "Thinking Process:" chatter Qwen3.5-4B emits by default. Only opted-in adapters pass it.
+        extra = {"enable_thinking": False} if self._supports_enable_thinking else {}
         text = self.tok.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True, enable_thinking=False
+            messages, tokenize=False, add_generation_prompt=True, **extra
         )
         ids = self.tok.apply_chat_template(
-            messages, tokenize=True, add_generation_prompt=True, enable_thinking=False
+            messages, tokenize=True, add_generation_prompt=True, **extra
         )
         # Newer tokenizers may return a BatchEncoding/dict when tokenize=True
         if hasattr(ids, "input_ids"):
