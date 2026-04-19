@@ -99,8 +99,10 @@ def run_experiment_2(
     conflict_prompts = build_conflicting_pairs(loaded.template)
     logger.info(f"[{model_key}] conflict pairs: {len(conflict_prompts)}")
 
+    from tqdm.auto import tqdm
+
     rows: list[dict] = []
-    for idx, cp in enumerate(conflict_prompts):
+    for idx, cp in enumerate(tqdm(conflict_prompts, desc=f"exp2 {model_key}")):
         for condition_name, bundle in (("REAL", cp.real), ("NONE", cp.none), ("FAKE", cp.fake)):
             ids = torch.tensor([bundle.input_ids], dtype=torch.long, device=loaded.device)
             with torch.no_grad():
