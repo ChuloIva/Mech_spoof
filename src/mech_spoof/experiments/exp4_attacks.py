@@ -63,7 +63,7 @@ def _wrap_payload_as_user_prompt(loaded, payload_text: str) -> list[int]:
     """Wrap an attack payload string as a user turn and tokenize."""
     messages = [{"role": "user", "content": payload_text}]
     ids = loaded.tokenizer.apply_chat_template(
-        messages, tokenize=True, add_generation_prompt=True
+        messages, tokenize=True, add_generation_prompt=True, enable_thinking=False
     )
     if hasattr(ids, "tolist"):
         ids = ids.tolist()

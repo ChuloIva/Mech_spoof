@@ -227,8 +227,15 @@ class GenericChatTemplate(TemplateAdapter):
         instruction_for_location: str,
         condition: Literal["S", "U", "REAL", "NONE", "FAKE"],
     ) -> PromptBundle:
-        text = self.tok.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-        ids = self.tok.apply_chat_template(messages, tokenize=True, add_generation_prompt=True)
+        # enable_thinking=False is Qwen3/Qwen3.5's hard switch to skip the <think> block
+        # (and the informal "Thinking Process:" chatter Qwen3.5-4B emits by default). Other
+        # tokenizers' Jinja templates silently ignore unknown kwargs, so this is safe globally.
+        text = self.tok.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True, enable_thinking=False
+        )
+        ids = self.tok.apply_chat_template(
+            messages, tokenize=True, add_generation_prompt=True, enable_thinking=False
+        )
         # Newer tokenizers may return a BatchEncoding/dict when tokenize=True
         if hasattr(ids, "input_ids"):
             ids = ids.input_ids
