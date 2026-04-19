@@ -42,3 +42,4 @@ cache/
 .DS_Store
 Thumbs.db
 result.json
+result(1).json

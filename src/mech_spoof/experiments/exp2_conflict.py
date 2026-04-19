@@ -12,7 +12,6 @@ from typing import Optional
 
 import numpy as np
 
-from mech_spoof.configs import GENERATION_MAX_NEW_TOKENS
 from mech_spoof.datasets.conflicting import build_conflicting_pairs
 from mech_spoof.eval.compliance import evaluate_compliance
 from mech_spoof.io import load_npz, save_result_bundle
@@ -46,7 +45,7 @@ def run_experiment_2(
     model_key: str,
     out_dir: Path,
     exp1_dir: Optional[Path] = None,
-    max_new_tokens: int = GENERATION_MAX_NEW_TOKENS,
+    max_new_tokens: int = 1024,
     seed: int = 42,
     batch_size: int = 8,
     free_after: bool = True,
@@ -158,7 +157,7 @@ def run_experiment_2(
                     "category": cp.pair.category,
                     "eval_type": cp.pair.eval,
                     "condition": cond,
-                    "system_followed": bool(system_followed),
+                    "system_followed": None if system_followed is None else bool(system_followed),
                     "probe_score": probe_scores[j],
                     "response": response,
                 })
@@ -171,14 +170,21 @@ def run_experiment_2(
             hook_handle.remove()
         tok.padding_side = original_padding
 
-    # Aggregate
+    # Aggregate. Rows with system_followed=None are unjudgable (judge parse failed)
+    # and are excluded from both compliance_rate and correlation.
     summary: dict = {}
     for cond in ("REAL", "NONE", "FAKE"):
         subset = [r for r in rows if r["condition"] == cond]
-        comply = np.mean([1 if r["system_followed"] else 0 for r in subset])
+        judged = [r for r in subset if r["system_followed"] is not None]
+        comply = (
+            float(np.mean([1 if r["system_followed"] else 0 for r in judged]))
+            if judged else None
+        )
         scores = [r["probe_score"] for r in subset if r["probe_score"] is not None]
         summary[cond] = {
-            "compliance_rate": float(comply),
+            "compliance_rate": comply,
+            "n_judged": len(judged),
+            "n_unjudgable": len(subset) - len(judged),
             "mean_probe_score": float(np.mean(scores)) if scores else None,
             "std_probe_score": float(np.std(scores)) if scores else None,
             "n": len(subset),
@@ -186,17 +192,22 @@ def run_experiment_2(
 
     correlation: dict = {}
     if direction is not None:
-        all_scores = np.array([r["probe_score"] for r in rows if r["probe_score"] is not None])
-        all_labels = np.array([
-            1 if r["system_followed"] else 0
-            for r in rows if r["probe_score"] is not None
-        ])
+        corr_rows = [
+            r for r in rows
+            if r["probe_score"] is not None and r["system_followed"] is not None
+        ]
+        all_scores = np.array([r["probe_score"] for r in corr_rows])
+        all_labels = np.array([1 if r["system_followed"] else 0 for r in corr_rows])
         if len(all_scores) > 2 and len(np.unique(all_labels)) > 1:
             r_val, p_val = pearsonr(all_scores, all_labels)
             correlation["overall"] = {"r": float(r_val), "p": float(p_val), "n": int(len(all_scores))}
         for cond in ("REAL", "NONE", "FAKE"):
-            subset = [r for r in rows
-                      if r["condition"] == cond and r["probe_score"] is not None]
+            subset = [
+                r for r in rows
+                if r["condition"] == cond
+                and r["probe_score"] is not None
+                and r["system_followed"] is not None
+            ]
             if len(subset) > 2:
                 xs = np.array([r["probe_score"] for r in subset])
                 ys = np.array([1 if r["system_followed"] else 0 for r in subset])

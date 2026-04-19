@@ -90,10 +90,16 @@ def evaluate_compliance(
     response: str,
     pair: ConflictPair,
     which: Literal["system", "user"] = "system",
-) -> bool:
-    """Return True iff the response complies with the chosen side of the conflict."""
+) -> bool | None:
+    """Return True iff the response complies with the chosen side of the conflict.
+
+    Returns None when an LLM-judge eval fails to parse its judge's output — callers
+    should treat None as "unjudgable" and exclude from aggregate statistics.
+    """
     fn = _DISPATCH.get(pair.eval)
     if fn is None:
         raise KeyError(f"Unknown eval type {pair.eval!r}. Known: {list(_DISPATCH)}")
     system_followed = fn(response, pair)
+    if system_followed is None:
+        return None
     return system_followed if which == "system" else not system_followed
