@@ -19,7 +19,7 @@ logger = get_logger(__name__)
 
 _JUDGE_CACHE_DIR = CACHE_DIR / "judge"
 _OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-_DEFAULT_MODEL = "anthropic/claude-haiku-4.5"
+_DEFAULT_MODEL = "google/gemma-4-26b-a4b-it"
 
 
 def _cache_key(prompt: str, response: str, criterion: str) -> str:

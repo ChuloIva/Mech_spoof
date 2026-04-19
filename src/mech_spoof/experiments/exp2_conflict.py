@@ -12,7 +12,6 @@ from typing import Optional
 
 import numpy as np
 
-from mech_spoof.activations import response_first_position
 from mech_spoof.configs import GENERATION_MAX_NEW_TOKENS
 from mech_spoof.datasets.conflicting import build_conflicting_pairs
 from mech_spoof.eval.compliance import evaluate_compliance
@@ -43,42 +42,22 @@ def _load_exp1_best_direction(exp1_dir: Path) -> tuple[int, np.ndarray] | None:
     return best, arrays[key]
 
 
-def _score_residual_at_position(loaded, input_ids, layer: int, position: int,
-                                direction: np.ndarray) -> float:
-    """Extract the residual stream at (layer, position) and project onto `direction`."""
-    import torch
-
-    storage: list = [None] * loaded.n_layers
-    handles = []
-    for i in range(loaded.n_layers):
-        def _hook(_m, _inp, out, idx=i):
-            h = out[0] if isinstance(out, tuple) else out
-            storage[idx] = h.detach()
-        handles.append(loaded.layer_module(i).register_forward_hook(_hook))
-
-    try:
-        ids = torch.tensor([input_ids], dtype=torch.long, device=loaded.device)
-        with torch.no_grad():
-            loaded.hf_model(input_ids=ids, use_cache=False)
-    finally:
-        for h in handles:
-            h.remove()
-
-    act = storage[layer][0, position].float().cpu().numpy()
-    act = act / (np.linalg.norm(act) + 1e-8)
-    direction = direction / (np.linalg.norm(direction) + 1e-8)
-    return float(act @ direction)
-
-
 def run_experiment_2(
     model_key: str,
     out_dir: Path,
     exp1_dir: Optional[Path] = None,
     max_new_tokens: int = GENERATION_MAX_NEW_TOKENS,
     seed: int = 42,
+    batch_size: int = 8,
     free_after: bool = True,
 ) -> Exp2Result:
-    """Run Experiment 2 end-to-end for one model."""
+    """Run Experiment 2 end-to-end for one model.
+
+    Batched generate with prefill-only residual capture via a forward hook on the target
+    block. The hook fires on every forward pass but only stores activations on the first
+    call per batch (the prefill) — avoiding the memory cost of output_hidden_states=True
+    and the wall-time cost of a second forward pass per prompt.
+    """
     import torch
     from scipy.stats import pearsonr
 
@@ -95,45 +74,102 @@ def run_experiment_2(
             f"[{model_key}] exp1 bundle not found — skipping probe-score correlation"
         )
     best_layer, direction = (best_dir or (None, None))
+    direction_norm = None
+    if direction is not None:
+        direction_norm = direction / (np.linalg.norm(direction) + 1e-8)
 
     conflict_prompts = build_conflicting_pairs(loaded.template)
     logger.info(f"[{model_key}] conflict pairs: {len(conflict_prompts)}")
 
     from tqdm.auto import tqdm
 
+    # Flatten (pair, condition, bundle) triples so we can batch across conditions.
+    flat: list[tuple] = []
+    for cp in conflict_prompts:
+        flat.append((cp, "REAL", cp.real))
+        flat.append((cp, "NONE", cp.none))
+        flat.append((cp, "FAKE", cp.fake))
+
+    tok = loaded.tokenizer
+    original_padding = getattr(tok, "padding_side", "right")
+    tok.padding_side = "left"
+    if tok.pad_token_id is None:
+        tok.pad_token_id = tok.eos_token_id
+
+    # Hook captures only the first forward pass per batch (the prefill).
+    prefill_state = {"last_token_acts": None, "captured": False}
+    hook_handle = None
+    if direction_norm is not None:
+        target_block = loaded.layer_module(int(best_layer))
+
+        def _prefill_hook(_m, _inp, out, state=prefill_state):
+            if state["captured"]:
+                return
+            h = out[0] if isinstance(out, tuple) else out
+            state["last_token_acts"] = h[:, -1, :].detach().float().cpu().numpy()
+            state["captured"] = True
+
+        hook_handle = target_block.register_forward_hook(_prefill_hook)
+
     rows: list[dict] = []
-    for idx, cp in enumerate(tqdm(conflict_prompts, desc=f"exp2 {model_key}")):
-        for condition_name, bundle in (("REAL", cp.real), ("NONE", cp.none), ("FAKE", cp.fake)):
-            ids = torch.tensor([bundle.input_ids], dtype=torch.long, device=loaded.device)
+    try:
+        iterator = range(0, len(flat), batch_size)
+        for start in tqdm(iterator, desc=f"exp2 {model_key} bs={batch_size}"):
+            chunk = flat[start:start + batch_size]
+            texts = [b.text for (_, _, b) in chunk]
+
+            enc = tok(
+                texts,
+                return_tensors="pt",
+                padding=True,
+                add_special_tokens=False,
+            )
+            input_ids = enc["input_ids"].to(loaded.device)
+            attention_mask = enc["attention_mask"].to(loaded.device)
+
+            prefill_state["last_token_acts"] = None
+            prefill_state["captured"] = False
+
             with torch.no_grad():
-                output = loaded.hf_model.generate(
-                    ids,
+                gen_out = loaded.hf_model.generate(
+                    input_ids,
+                    attention_mask=attention_mask,
                     max_new_tokens=max_new_tokens,
                     do_sample=False,
-                    pad_token_id=loaded.tokenizer.pad_token_id,
-                )
-            response = loaded.tokenizer.decode(
-                output[0][ids.shape[1]:], skip_special_tokens=True
-            )
-
-            system_followed = evaluate_compliance(response, cp.pair, which="system")
-
-            probe_score = None
-            if direction is not None:
-                probe_score = _score_residual_at_position(
-                    loaded, bundle.input_ids, best_layer,
-                    response_first_position(loaded, bundle), direction,
+                    pad_token_id=tok.pad_token_id,
                 )
 
-            rows.append({
-                "pair_id": cp.pair.id,
-                "category": cp.pair.category,
-                "eval_type": cp.pair.eval,
-                "condition": condition_name,
-                "system_followed": bool(system_followed),
-                "probe_score": probe_score,
-                "response": response,
-            })
+            prompt_len = input_ids.shape[1]
+            gen_tokens = gen_out[:, prompt_len:]
+
+            probe_scores: list[float | None] = [None] * len(chunk)
+            if direction_norm is not None and prefill_state["last_token_acts"] is not None:
+                acts = prefill_state["last_token_acts"]  # (batch, d)
+                for j in range(len(chunk)):
+                    vec = acts[j]
+                    vec = vec / (np.linalg.norm(vec) + 1e-8)
+                    probe_scores[j] = float(vec @ direction_norm)
+
+            for j, (cp, cond, _bundle) in enumerate(chunk):
+                response = tok.decode(gen_tokens[j], skip_special_tokens=True)
+                system_followed = evaluate_compliance(response, cp.pair, which="system")
+                rows.append({
+                    "pair_id": cp.pair.id,
+                    "category": cp.pair.category,
+                    "eval_type": cp.pair.eval,
+                    "condition": cond,
+                    "system_followed": bool(system_followed),
+                    "probe_score": probe_scores[j],
+                    "response": response,
+                })
+
+            del gen_out, input_ids, attention_mask, enc
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+    finally:
+        if hook_handle is not None:
+            hook_handle.remove()
+        tok.padding_side = original_padding
 
     # Aggregate
     summary: dict = {}
