@@ -117,3 +117,63 @@ def build_structural_contrastive(
         train_idx=train_idx,
         test_idx=test_idx,
     )
+
+
+def build_structural_contrastive_matched(
+    template: TemplateAdapter,
+    baseline_system: str = "You are a helpful assistant.",
+    instructions_by_category: dict[str, list[str]] | None = None,
+    train_fraction: float = STRUCTURAL_TRAIN_FRACTION,
+    seed: int = 42,
+) -> StructuralDataset:
+    """Control dataset where both conditions share an identical baseline system block.
+
+    Only the *placement* of the instruction-of-interest varies:
+      - S: system = "{baseline}\\n{instruction}", user = followup
+      - U: system = "{baseline}",                  user = "{instruction}\\n\\n{followup}"
+
+    Kills the trivial "is there a system block?" feature that plain S vs U leaks.
+    """
+    if instructions_by_category is None:
+        instructions_by_category = load_structural_instructions()
+
+    all_instructions: list[str] = []
+    categories: list[str] = []
+    for cat in STRUCTURAL_CATEGORIES:
+        items = instructions_by_category.get(cat, [])
+        all_instructions.extend(items)
+        categories.extend([cat] * len(items))
+
+    if not all_instructions:
+        raise ValueError("No instructions loaded — check data/structural/seeds.json")
+
+    logger.info(
+        f"Building structural MATCHED-baseline dataset: {len(all_instructions)} instructions "
+        f"across {len(set(categories))} categories (baseline={baseline_system!r})"
+    )
+
+    prompts_system = [
+        template.make_system_prompt_matched(ins, baseline_system=baseline_system)
+        for ins in all_instructions
+    ]
+    prompts_user = [
+        template.make_user_prompt_matched(ins, baseline_system=baseline_system)
+        for ins in all_instructions
+    ]
+
+    set_seed(seed)
+    n = len(all_instructions)
+    idx = list(range(n))
+    random.Random(seed).shuffle(idx)
+    cutoff = int(n * train_fraction)
+    train_idx = sorted(idx[:cutoff])
+    test_idx = sorted(idx[cutoff:])
+
+    return StructuralDataset(
+        instructions=all_instructions,
+        categories=categories,
+        prompts_system=prompts_system,
+        prompts_user=prompts_user,
+        train_idx=train_idx,
+        test_idx=test_idx,
+    )

@@ -79,6 +79,7 @@ def judge_topic(response: str, topic_win_desc: str, topic_user_desc: str,
         "(answer NO)? Reply with exactly one word: YES or NO."
     )
     text = _call_openrouter(prompt, model=model, max_tokens=8)
+    logger.info(f"judge topic raw: {text!r}")
     system_followed = text.startswith("YES")
     _save_cached(key, {"system_followed": system_followed, "raw": text})
     return system_followed
@@ -101,6 +102,7 @@ def judge_tone(response: str, tone_win: str, tone_user: str,
         "Reply with exactly one letter: A or B."
     )
     text = _call_openrouter(prompt, model=model, max_tokens=4)
+    logger.info(f"judge tone raw: {text!r}")
     system_followed = text.startswith("A")
     _save_cached(key, {"system_followed": system_followed, "raw": text})
     return system_followed

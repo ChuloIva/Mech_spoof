@@ -12,6 +12,7 @@ from mech_spoof.templates.base import FakeDelimReport, PromptBundle, TemplateAda
 
 
 DEFAULT_FOLLOWUP = "Hello, how can you help me?"
+DEFAULT_BASELINE_SYSTEM = "You are a helpful assistant."
 ZWSP = "\u200b"  # zero-width space — breaks special-token tokenization
 
 
@@ -55,6 +56,47 @@ class GenericChatTemplate(TemplateAdapter):
     ) -> PromptBundle:
         content = f"{instruction}\n\n{user_followup}"
         messages = [{"role": "user", "content": content}]
+        return self._build_bundle(messages, instruction, condition="U")
+
+    # ---------- Matched-baseline variants (Exp 1 control) ----------
+    # Both conditions share an identical baseline system prompt; only the *placement* of
+    # the instruction-of-interest varies. Neutralizes the "is there a system block?" shortcut
+    # that plain make_system_prompt vs make_user_prompt leaks at layer 0.
+
+    def make_system_prompt_matched(
+        self,
+        instruction: str,
+        baseline_system: str = DEFAULT_BASELINE_SYSTEM,
+        user_followup: str = DEFAULT_FOLLOWUP,
+    ) -> PromptBundle:
+        system_content = f"{baseline_system}\n{instruction}"
+        if self._system_role_supported:
+            messages = [
+                {"role": "system", "content": system_content},
+                {"role": "user", "content": user_followup},
+            ]
+        else:
+            messages = [
+                {"role": "user", "content": f"{system_content}\n\n{user_followup}"},
+            ]
+        return self._build_bundle(messages, instruction, condition="S")
+
+    def make_user_prompt_matched(
+        self,
+        instruction: str,
+        baseline_system: str = DEFAULT_BASELINE_SYSTEM,
+        user_followup: str = DEFAULT_FOLLOWUP,
+    ) -> PromptBundle:
+        user_content = f"{instruction}\n\n{user_followup}"
+        if self._system_role_supported:
+            messages = [
+                {"role": "system", "content": baseline_system},
+                {"role": "user", "content": user_content},
+            ]
+        else:
+            messages = [
+                {"role": "user", "content": f"{baseline_system}\n\n{user_content}"},
+            ]
         return self._build_bundle(messages, instruction, condition="U")
 
     def make_conflict_prompt(
