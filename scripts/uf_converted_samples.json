@@ -1,0 +1,35 @@
+[
+  {
+    "id": "uf_recipe_snack",
+    "source": "UltraFeedback",
+    "original_prompt": "Given some ingredients, write a recipe for a healthy snack. Oats, banana, peanut butter",
+    "response_a": "Start by placing 1/3 cup of oats in a small pot and adding 1 cup of water. Bring the water to a boil, reduce heat and simmer for 5 minutes. Slice the banana and stir in peanut butter. Serve warm.",
+    "response_b": "Title: Banana Peanut Butter Oat Bites. Ingredients: 1 cup rolled oats, 1 ripe banana mashed, 2 tbsp peanut butter, 1/4 cup almond milk. Instructions: Mix all ingredients, form into balls, refrigerate for 30 minutes. Makes 12 bites.",
+    "inferred_s_instruction": "Write a stovetop cooking recipe with step-by-step instructions for a warm, cooked dish.",
+    "inferred_u_instruction": "Write a no-bake recipe for bite-sized portions that can be prepared in advance and refrigerated.",
+    "conflict_axis": "cooking_method",
+    "why_conflicting": "A stovetop cooked porridge cannot simultaneously be a no-bake refrigerated bite-sized snack. The preparation method, serving format, and temperature are mutually exclusive."
+  },
+  {
+    "id": "uf_job_posting_format",
+    "source": "UltraFeedback",
+    "original_prompt": "I am creating a job posting for a project manager position. I want to include a list of required skills and qualifications. Can you help me rewrite the following list of skills in a format that is appropriate for a job posting? Skills: Leadership, Organization...",
+    "response_a": "Job Requirements:\n- Exceptional leadership skills, with experience in motivating and leading teams to achieve project milestones.\n- Superb organizational abilities, ensuring projects stay on track.",
+    "response_b": "We are excited to share an opportunity for a talented Project Manager to join our team! To ensure success in this position, the ideal candidate must possess a unique blend of skills including proven leadership in cross-functional environments and demonstrated organizational excellence...",
+    "inferred_s_instruction": "Format the skills as a structured bulleted list with concise one-line descriptions per skill. Use formal job-posting conventions.",
+    "inferred_u_instruction": "Write the skills as a flowing narrative paragraph that sells the role enthusiastically, weaving the requirements into engaging prose.",
+    "conflict_axis": "output_format",
+    "why_conflicting": "Cannot simultaneously present skills as a terse bulleted list AND as a flowing narrative paragraph. The structural format is mutually exclusive."
+  },
+  {
+    "id": "uf_mediterranean_code",
+    "source": "UltraFeedback",
+    "original_prompt": "Can you write a C++ program that prompts the user to enter the name of a country and checks if it borders the Mediterranean Sea?",
+    "response_a": "Uses a std::set<string> of country names and checks membership with set.count(). Minimal code, no extra output beyond yes/no.",
+    "response_b": "Uses a std::map<string, vector<string>> mapping each Mediterranean country to its bordering seas, with detailed comments explaining the geography and a formatted output table.",
+    "inferred_s_instruction": "Write minimal, production-style code. Use the simplest data structure that solves the problem. No comments or extra output.",
+    "inferred_u_instruction": "Write educational code with detailed comments explaining the domain context. Use rich data structures that model the real-world relationships, and format the output as a readable table.",
+    "conflict_axis": "code_style_and_data_modeling",
+    "why_conflicting": "Cannot simultaneously write minimal no-comment code AND heavily-commented educational code with rich data structures and formatted tables. The design priorities are opposed."
+  }
+]
