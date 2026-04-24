@@ -71,6 +71,18 @@ def _truncate(text: str, max_chars: int) -> str:
     return text[:max_chars]
 
 
+def _flatten_ids(ids) -> list[int]:
+    if hasattr(ids, "input_ids"):
+        ids = ids.input_ids
+    elif isinstance(ids, dict) and "input_ids" in ids:
+        ids = ids["input_ids"]
+    if hasattr(ids, "tolist"):
+        ids = ids.tolist()
+    if isinstance(ids, list) and ids and isinstance(ids[0], list):
+        ids = ids[0]
+    return [int(x) for x in ids]
+
+
 def _make_bundle(
     tokenizer,
     sys_instr: str,
@@ -82,43 +94,49 @@ def _make_bundle(
     system_role_supported: bool = True,
 ) -> PromptBundle:
     if system_role_supported:
-        messages = [
+        messages_full = [
             {"role": "system", "content": sys_instr},
             {"role": "user", "content": user_instr},
             {"role": "assistant", "content": response},
         ]
+        messages_prefix = messages_full[:-1]
     else:
-        messages = [
+        messages_full = [
             {"role": "user", "content": f"{sys_instr}\n\n{user_instr}"},
             {"role": "assistant", "content": response},
         ]
+        messages_prefix = messages_full[:-1]
 
     extra_kwargs = {"enable_thinking": False} if supports_enable_thinking else {}
 
     text = tokenizer.apply_chat_template(
-        messages, tokenize=False, add_generation_prompt=False, **extra_kwargs,
+        messages_full, tokenize=False, add_generation_prompt=False, **extra_kwargs,
     )
-    ids = tokenizer.apply_chat_template(
-        messages, tokenize=True, add_generation_prompt=False, **extra_kwargs,
-    )
-    if hasattr(ids, "input_ids"):
-        ids = ids.input_ids
-    elif isinstance(ids, dict) and "input_ids" in ids:
-        ids = ids["input_ids"]
-    if hasattr(ids, "tolist"):
-        ids = ids.tolist()
-    if isinstance(ids, list) and ids and isinstance(ids[0], list):
-        ids = ids[0]
-    ids_list = [int(x) for x in ids]
+    full_ids = _flatten_ids(tokenizer.apply_chat_template(
+        messages_full, tokenize=True, add_generation_prompt=False, **extra_kwargs,
+    ))
+    # Prefix with generation prompt: ends exactly where the assistant turn would begin generating.
+    prefix_ids = _flatten_ids(tokenizer.apply_chat_template(
+        messages_prefix, tokenize=True, add_generation_prompt=True, **extra_kwargs,
+    ))
+
+    response_start = min(len(prefix_ids), len(full_ids))
+    response_end = len(full_ids)
+    # Sanity fallback if template does something unexpected.
+    if response_end <= response_start:
+        response_start = max(0, response_end - 1)
+
+    extras_with_span = dict(extras)
+    extras_with_span["response_token_span"] = (response_start, response_end)
 
     return PromptBundle(
         text=text,
-        input_ids=ids_list,
+        input_ids=full_ids,
         instruction_text=response[:100],
-        instruction_token_span=(0, len(ids_list)),
-        response_first_pos=len(ids_list) - 1,
+        instruction_token_span=(0, response_start),
+        response_first_pos=response_start,
         condition=condition,
-        extras=extras,
+        extras=extras_with_span,
     )
 
 
@@ -140,7 +158,11 @@ def build_conflict_traces(
             supports_enable_thinking=supports_enable_thinking,
             system_role_supported=system_role_supported,
         )
-        base_extras = {"pair_idx": pair.idx, "macro_axis": pair.macro_axis}
+        base_extras = {
+            "pair_idx": pair.idx,
+            "macro_axis": pair.macro_axis,
+            "conflict_axis": pair.conflict_axis,
+        }
 
         # Trace 1: sys=A, user=B, resp=A-aligned → system-following
         t1 = _make_bundle(

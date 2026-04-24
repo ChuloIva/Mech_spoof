@@ -277,6 +277,171 @@ def extract_at_last_token_batched(
     return out
 
 
+def extract_multi_position_with_ppl_batched(
+    loaded: LoadedModel,
+    prompt_bundles,
+    position_names: tuple[str, ...] = ("response_first", "response_mid", "response_last"),
+    batch_size: int = 4,
+    max_length: int | None = None,
+    cache_dir: Path | None = None,
+    progress: bool = True,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Batched forward pass returning residual activations at multiple positions + response perplexity.
+
+    Requires each bundle to have `extras["response_token_span"] = (start, end)` (inclusive start,
+    exclusive end in the un-padded input_ids). Positions are resolved per-prompt:
+        response_first  = start
+        response_mid    = (start + end - 1) // 2
+        response_last   = end - 1  (typically the EOT / end-of-turn marker)
+
+    Right-truncates to `max_length` (may clip the end of long responses — the PPL then only
+    covers the surviving response tokens).
+
+    Returns
+    -------
+    acts : np.ndarray, shape (n_prompts, n_positions, n_layers, d_model), float32
+    ppl  : np.ndarray, shape (n_prompts,), float32  — exp(mean NLL) over the response span
+    """
+    import torch
+    from tqdm.auto import tqdm
+
+    tok = loaded.tokenizer
+    device = loaded.device
+    n_layers = loaded.n_layers
+    d_model = loaded.d_model
+    n_pos = len(position_names)
+    n = len(prompt_bundles)
+
+    acts_out = np.zeros((n, n_pos, n_layers, d_model), dtype=np.float32)
+    ppl_out = np.full((n,), np.nan, dtype=np.float32)
+
+    if cache_dir is not None:
+        cache_dir = Path(cache_dir)
+        cache_dir.mkdir(parents=True, exist_ok=True)
+
+    todo: list[int] = []
+    for i in range(n):
+        if cache_dir is not None:
+            p = cache_dir / f"prompt_{i:05d}.pkl"
+            if p.exists():
+                with open(p, "rb") as f:
+                    blob = pickle.load(f)
+                acts_out[i] = blob["acts"]
+                ppl_out[i] = blob["ppl"]
+                continue
+        todo.append(i)
+
+    if not todo:
+        return acts_out, ppl_out
+
+    def _resolve(r_start: int, r_end: int) -> list[int]:
+        r_last = max(r_start, r_end - 1)
+        r_mid = (r_start + r_last) // 2
+        mapping = {
+            "response_first": r_start,
+            "response_mid": r_mid,
+            "response_last": r_last,
+        }
+        return [mapping[n] for n in position_names]
+
+    pad_id = tok.pad_token_id if tok.pad_token_id is not None else tok.eos_token_id
+
+    iterator = range(0, len(todo), batch_size)
+    if progress:
+        iterator = tqdm(iterator, desc=f"extract+ppl [{loaded.cfg.key}] bs={batch_size}")
+
+    for start in iterator:
+        batch_ix = todo[start:start + batch_size]
+        if not batch_ix:
+            continue
+
+        items = []
+        for i in batch_ix:
+            b = prompt_bundles[i]
+            ids = list(b.input_ids)
+            extras = b.extras or {}
+            r_start, r_end = extras.get("response_token_span", (len(ids) - 1, len(ids)))
+            if max_length is not None and len(ids) > max_length:
+                ids = ids[:max_length]
+                r_end = min(r_end, len(ids))
+                r_start = min(r_start, r_end)
+            items.append({
+                "idx": i,
+                "ids": ids,
+                "r_start": int(r_start),
+                "r_end": int(r_end),
+                "positions": _resolve(int(r_start), int(r_end)),
+            })
+
+        batch_max_len = max(len(it["ids"]) for it in items)
+        input_ids_np = np.full((len(items), batch_max_len), pad_id, dtype=np.int64)
+        attention_np = np.zeros((len(items), batch_max_len), dtype=np.int64)
+        pad_lens: list[int] = []
+        for row, it in enumerate(items):
+            L = len(it["ids"])
+            pad_len = batch_max_len - L
+            pad_lens.append(pad_len)
+            input_ids_np[row, pad_len:] = it["ids"]
+            attention_np[row, pad_len:] = 1
+
+        input_ids_t = torch.from_numpy(input_ids_np).to(device)
+        attention_mask_t = torch.from_numpy(attention_np).to(device)
+
+        storage: list = [None] * n_layers
+        handles = _register_hooks(loaded, storage)
+        try:
+            with torch.no_grad():
+                outputs = loaded.hf_model(
+                    input_ids=input_ids_t,
+                    attention_mask=attention_mask_t,
+                    use_cache=False,
+                )
+                logits = outputs.logits  # (b, s, V), model dtype
+        finally:
+            for h in handles:
+                h.remove()
+
+        # Gather per-position activations on GPU, then copy per-row to CPU.
+        pos_idx_t = torch.tensor(
+            [[pad_lens[row] + p for p in items[row]["positions"]] for row in range(len(items))],
+            device=device, dtype=torch.long,
+        )  # (b, n_pos)
+
+        for row, it in enumerate(items):
+            # Per-row gather: shape (n_pos, n_layers, d)
+            gathered = np.zeros((n_pos, n_layers, d_model), dtype=np.float32)
+            for li in range(n_layers):
+                h = storage[li][row]  # (s, d)
+                vecs = h[pos_idx_t[row]]  # (n_pos, d)
+                gathered[:, li, :] = vecs.float().cpu().numpy()
+
+            # Perplexity over the response span.
+            r_start_p = pad_lens[row] + it["r_start"]
+            r_end_p = pad_lens[row] + it["r_end"]
+            if r_end_p > r_start_p and r_start_p >= 1:
+                logit_slice = logits[row, r_start_p - 1: r_end_p - 1, :].float()
+                target_slice = input_ids_t[row, r_start_p: r_end_p]
+                loss = torch.nn.functional.cross_entropy(
+                    logit_slice, target_slice, reduction="mean"
+                )
+                ppl_val = float(torch.exp(loss).cpu().item())
+            else:
+                ppl_val = float("nan")
+
+            acts_out[it["idx"]] = gathered
+            ppl_out[it["idx"]] = ppl_val
+
+            if cache_dir is not None:
+                with open(cache_dir / f"prompt_{it['idx']:05d}.pkl", "wb") as f:
+                    pickle.dump({"acts": gathered, "ppl": ppl_val}, f)
+
+        del storage, logits, outputs, input_ids_t, attention_mask_t, pos_idx_t
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+    return acts_out, ppl_out
+
+
 def accumulate_last_token_means(
     loaded: LoadedModel,
     prompt_bundles,
