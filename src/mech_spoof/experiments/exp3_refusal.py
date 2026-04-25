@@ -19,7 +19,7 @@ from mech_spoof.directions import (
     analyze_authority_refusal_relationship,
     compute_refusal_direction,
 )
-from mech_spoof.io import load_json, load_npz, save_result_bundle
+from mech_spoof.io import load_authority_directions, save_result_bundle
 from mech_spoof.models import free_model, load_model
 from mech_spoof.utils import get_logger, set_seed, timer
 
@@ -39,22 +39,11 @@ class Exp3Result:
     n_harmless: int
 
 
-def _load_exp1_authority_dirs(exp1_dir: Path) -> tuple[int, dict[int, np.ndarray]]:
-    result = load_json(Path(exp1_dir) / "result.json")
-    best = int(result["best_layer"])
-    arrays = load_npz(Path(exp1_dir) / "arrays.npz")
-    auth_dirs = {}
-    for k, v in arrays.items():
-        if k.startswith("probe_dir_layer_"):
-            layer = int(k.split("_")[-1])
-            auth_dirs[layer] = v
-    return best, auth_dirs
-
-
 def run_experiment_3(
     model_key: str,
     out_dir: Path,
     exp1_dir: Path,
+    probe_position: str | None = None,
     source: str = "builtin",
     wrap_mode: WrapMode = "raw",
     seed: int = 42,
@@ -113,7 +102,16 @@ def run_experiment_3(
             max_length=max_length,
         )
 
-    best_authority, auth_dirs = _load_exp1_authority_dirs(exp1_dir)
+    loaded_auth = load_authority_directions(exp1_dir, position=probe_position)
+    if loaded_auth is None:
+        raise FileNotFoundError(
+            f"Exp3 requires an authority probe bundle at {exp1_dir} (exp1 or exp1b)."
+        )
+    best_authority, auth_dirs, resolved_authority_position = loaded_auth
+    if resolved_authority_position:
+        logger.info(
+            f"[{model_key}] using exp1b authority probe at position={resolved_authority_position}"
+        )
     geometry = analyze_authority_refusal_relationship(auth_dirs, refusal.directions)
 
     arrays = {f"refusal_dir_layer_{l:03d}": v for l, v in refusal.directions.items()}
@@ -138,6 +136,7 @@ def run_experiment_3(
         "n_harmful": refusal.n_harmful,
         "n_harmless": refusal.n_harmless,
         "best_layer_authority": int(best_authority),
+        "authority_probe_position": resolved_authority_position,
         "cosine_at_best_authority_layer": float(cos_at_best) if cos_at_best is not None else None,
         "strong_layers": refusal.strong_layers,
         "geometry": {

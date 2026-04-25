@@ -9,7 +9,6 @@ signal on that prompt.
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -18,13 +17,11 @@ import numpy as np
 
 from mech_spoof.datasets.conflicting import build_conflicting_pairs
 from mech_spoof.eval.compliance import evaluate_compliance
-from mech_spoof.io import load_npz, save_result_bundle
+from mech_spoof.io import load_authority_directions, save_result_bundle
 from mech_spoof.models import free_model, load_model
 from mech_spoof.utils import get_logger, set_seed, timer
 
 logger = get_logger(__name__)
-
-_PROBE_DIR_KEY = re.compile(r"probe_dir_layer_(\d+)")
 
 
 @dataclass
@@ -35,30 +32,11 @@ class Exp2Result:
     correlation: dict      # best-layer per-condition + per-layer + n-activated
 
 
-def _load_exp1_all_directions(
-    exp1_dir: Path,
-) -> tuple[int, dict[int, np.ndarray]] | None:
-    """Load best_layer plus every per-layer probe direction from an exp1 bundle."""
-    if exp1_dir is None or not Path(exp1_dir).exists():
-        return None
-    from mech_spoof.io import load_json
-    result = load_json(Path(exp1_dir) / "result.json")
-    best = int(result["best_layer"])
-    arrays = load_npz(Path(exp1_dir) / "arrays.npz")
-    dirs: dict[int, np.ndarray] = {}
-    for key, val in arrays.items():
-        m = _PROBE_DIR_KEY.fullmatch(key)
-        if m:
-            dirs[int(m.group(1))] = val
-    if not dirs:
-        return None
-    return best, dirs
-
-
 def run_experiment_2(
     model_key: str,
     out_dir: Path,
     exp1_dir: Optional[Path] = None,
+    probe_position: str | None = None,
     max_new_tokens: int = 1024,
     seed: int = 42,
     batch_size: int = 8,
@@ -84,20 +62,26 @@ def run_experiment_2(
     loaded = load_model(model_key)
 
     # Load authority probe directions for every layer (optional).
-    loaded_dirs = _load_exp1_all_directions(exp1_dir) if exp1_dir else None
+    loaded_dirs = (
+        load_authority_directions(exp1_dir, position=probe_position)
+        if exp1_dir else None
+    )
     if loaded_dirs is None:
         logger.warning(
-            f"[{model_key}] exp1 bundle not found — skipping probe-score correlation"
+            f"[{model_key}] exp1/exp1b bundle not found — skipping probe-score correlation"
         )
         best_layer: int | None = None
         direction_norms: dict[int, np.ndarray] = {}
+        resolved_position: str | None = None
     else:
-        best_layer, raw_dirs = loaded_dirs
+        best_layer, raw_dirs, resolved_position = loaded_dirs
         direction_norms = {
             l: (v / (np.linalg.norm(v) + 1e-8)) for l, v in raw_dirs.items()
         }
+        pos_msg = f" position={resolved_position}" if resolved_position else ""
         logger.info(
-            f"[{model_key}] loaded {len(direction_norms)} probe directions; best_layer={best_layer}"
+            f"[{model_key}] loaded {len(direction_norms)} probe directions;"
+            f" best_layer={best_layer}{pos_msg}"
         )
 
     conflict_prompts = build_conflicting_pairs(loaded.template)
@@ -361,6 +345,7 @@ def run_experiment_2(
         "model_key": model_key,
         "n_pairs": len(conflict_prompts),
         "exp1_best_layer": int(best_layer) if best_layer is not None else None,
+        "probe_position": resolved_position,
         "layers_tracked": layers_tracked,
         "summary": summary,
         "correlation": correlation,

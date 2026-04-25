@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import pickle
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -11,6 +12,9 @@ from typing import Any
 import numpy as np
 
 from mech_spoof.utils import git_sha, gpu_name
+
+_PROBE_DIR_KEY_LEGACY = re.compile(r"probe_dir_layer_(\d+)")
+_PROBE_DIR_KEY_V2 = re.compile(r"probe_dir__([a-zA-Z0-9_]+?)__layer_(\d+)")
 
 
 def ensure_dir(path: Path) -> Path:
@@ -106,6 +110,55 @@ def load_result_bundle(in_dir: Path) -> dict:
     for pkl in in_dir.glob("*.pkl"):
         out[pkl.stem] = load_pickle(pkl)
     return out
+
+
+def load_authority_directions(
+    bundle_dir: Path,
+    position: str | None = None,
+) -> tuple[int, dict[int, np.ndarray], str | None] | None:
+    """Load per-layer authority probe directions from an exp1 or exp1b bundle.
+
+    Schemas:
+      legacy exp1 : `probe_dir_layer_NNN`
+      exp1b       : `probe_dir__<position>__layer_NNN`
+
+    For exp1b bundles, `position` selects which extraction-position direction set to load
+    (default: the bundle's `result.json:best_position`). Returns
+    `(best_layer, dirs, resolved_position_or_None)`, or `None` if no bundle is found.
+    """
+    if bundle_dir is None or not Path(bundle_dir).exists():
+        return None
+
+    result = load_json(Path(bundle_dir) / "result.json")
+    arrays = load_npz(Path(bundle_dir) / "arrays.npz")
+
+    v2_groups: dict[str, dict[int, np.ndarray]] = {}
+    for key, val in arrays.items():
+        m = _PROBE_DIR_KEY_V2.fullmatch(key)
+        if m:
+            v2_groups.setdefault(m.group(1), {})[int(m.group(2))] = val
+
+    if v2_groups:
+        chosen = position or result.get("best_position")
+        if chosen is None:
+            chosen = sorted(v2_groups.keys())[0]
+        if chosen not in v2_groups:
+            raise KeyError(
+                f"position '{chosen}' not in bundle {bundle_dir};"
+                f" available: {sorted(v2_groups.keys())}"
+            )
+        dirs = v2_groups[chosen]
+        best = int(result.get("best_layer", max(dirs)))
+        return best, dirs, chosen
+
+    legacy: dict[int, np.ndarray] = {}
+    for key, val in arrays.items():
+        m = _PROBE_DIR_KEY_LEGACY.fullmatch(key)
+        if m:
+            legacy[int(m.group(1))] = val
+    if not legacy:
+        return None
+    return int(result["best_layer"]), legacy, None
 
 
 def _json_default(obj: Any) -> Any:

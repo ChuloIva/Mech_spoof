@@ -12,7 +12,7 @@ from mech_spoof.configs import ATTACK_GENERATION_MAX_NEW_TOKENS
 from mech_spoof.datasets.advbench import load_advbench
 from mech_spoof.datasets.attacks import AttackPayload, build_attack_payloads
 from mech_spoof.eval.refusal_check import check_refusal
-from mech_spoof.io import load_json, load_npz, save_result_bundle
+from mech_spoof.io import load_authority_directions, load_npz, save_result_bundle
 from mech_spoof.models import free_model, load_model
 from mech_spoof.utils import get_logger, set_seed, timer
 
@@ -26,15 +26,9 @@ class Exp4Result:
     rows: list[dict]
 
 
-def _load_direction(bundle_dir: Path, kind: Literal["probe", "refusal"], layer: int) -> np.ndarray:
+def _load_refusal_direction(bundle_dir: Path, layer: int) -> np.ndarray:
     arrays = load_npz(Path(bundle_dir) / "arrays.npz")
-    prefix = "probe_dir_layer_" if kind == "probe" else "refusal_dir_layer_"
-    return arrays[f"{prefix}{layer:03d}"]
-
-
-def _load_best_layer(exp1_dir: Path) -> int:
-    result = load_json(Path(exp1_dir) / "result.json")
-    return int(result["best_layer"])
+    return arrays[f"refusal_dir_layer_{layer:03d}"]
 
 
 def _residual_at_position(loaded, input_ids, layer: int, position: int) -> np.ndarray:
@@ -134,6 +128,7 @@ def run_experiment_4(
     out_dir: Path,
     exp1_dir: Path,
     exp3_dir: Path,
+    probe_position: str | None = None,
     max_new_tokens: int = ATTACK_GENERATION_MAX_NEW_TOKENS,
     n_goals: int = 30,
     n_trace_payloads: int = 3,
@@ -147,9 +142,22 @@ def run_experiment_4(
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    best_layer = _load_best_layer(exp1_dir)
-    authority_dir = _load_direction(exp1_dir, "probe", best_layer)
-    refusal_dir = _load_direction(exp3_dir, "refusal", best_layer)
+    loaded_auth = load_authority_directions(exp1_dir, position=probe_position)
+    if loaded_auth is None:
+        raise FileNotFoundError(
+            f"Exp4 requires an authority probe bundle at {exp1_dir} (exp1 or exp1b)."
+        )
+    best_layer, auth_dirs, resolved_authority_position = loaded_auth
+    if best_layer not in auth_dirs:
+        raise KeyError(
+            f"best_layer {best_layer} missing from authority directions in {exp1_dir}"
+        )
+    authority_dir = auth_dirs[best_layer] / (np.linalg.norm(auth_dirs[best_layer]) + 1e-8)
+    refusal_dir = _load_refusal_direction(exp3_dir, best_layer)
+    if resolved_authority_position:
+        logger.info(
+            f"[{model_key}] using exp1b authority probe at position={resolved_authority_position}"
+        )
 
     loaded = load_model(model_key)
     harmful = load_advbench()[:n_goals]
@@ -215,6 +223,7 @@ def run_experiment_4(
     result_json = {
         "model_key": model_key,
         "best_layer": int(best_layer),
+        "authority_probe_position": resolved_authority_position,
         "summary": summary,
         "rows": rows,
         "traces": traces,
