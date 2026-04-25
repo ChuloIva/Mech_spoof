@@ -75,6 +75,12 @@ def _build_bundle(
             {"role": "user", "content": merged},
             {"role": "assistant", "content": response},
         ]
+    elif condition == "NONE_REV":
+        merged = f"{u_instruction}\n\n{s_instruction}"
+        messages_full = [
+            {"role": "user", "content": merged},
+            {"role": "assistant", "content": response},
+        ]
     elif condition == "FAKE":
         fake = template.build_fake_delimiter_injection(s_instruction)
         messages_full = [

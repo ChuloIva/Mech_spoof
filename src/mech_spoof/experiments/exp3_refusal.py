@@ -15,11 +15,12 @@ import numpy as np
 
 from mech_spoof.directions import (
     GeometryReport,
+    RefusalResult,
     WrapMode,
     analyze_authority_refusal_relationship,
     compute_refusal_direction,
 )
-from mech_spoof.io import load_authority_directions, save_result_bundle
+from mech_spoof.io import load_authority_directions, load_json, load_npz, save_result_bundle
 from mech_spoof.models import free_model, load_model
 from mech_spoof.utils import get_logger, set_seed, timer
 
@@ -39,11 +40,50 @@ class Exp3Result:
     n_harmless: int
 
 
+def _load_refusal_from_bundle(bundle_dir: Path) -> RefusalResult:
+    """Reconstruct a RefusalResult from a previously saved exp3 bundle.
+
+    Only `directions` + `norms` + metadata are restored — `harmful_mean` / `harmless_mean`
+    are not persisted by save_result_bundle and are not needed for downstream geometry.
+    """
+    arrays = load_npz(bundle_dir / "arrays.npz")
+    meta = load_json(bundle_dir / "result.json")
+
+    directions: dict[int, np.ndarray] = {}
+    for key, val in arrays.items():
+        if not key.startswith("refusal_dir_layer_"):
+            continue
+        try:
+            layer = int(key.replace("refusal_dir_layer_", ""))
+        except ValueError:
+            continue
+        directions[layer] = val.astype(np.float32)
+
+    if not directions:
+        raise FileNotFoundError(f"No refusal directions found in {bundle_dir}/arrays.npz")
+
+    norms_meta = meta.get("refusal_norms", {})
+    norms = {int(k): float(v) for k, v in norms_meta.items()}
+
+    return RefusalResult(
+        directions=directions,
+        norms=norms,
+        harmful_mean={},
+        harmless_mean={},
+        wrap_mode=meta.get("wrap_mode", "raw"),
+        source=meta.get("source", "custom"),
+        strong_layers=list(meta.get("strong_layers", []) or []),
+        n_harmful=int(meta.get("n_harmful", 0) or 0),
+        n_harmless=int(meta.get("n_harmless", 0) or 0),
+    )
+
+
 def run_experiment_3(
     model_key: str,
     out_dir: Path,
     exp1_dir: Path,
     probe_position: str | None = None,
+    refusal_bundle_path: Path | None = None,
     source: str = "builtin",
     wrap_mode: WrapMode = "raw",
     seed: int = 42,
@@ -75,32 +115,38 @@ def run_experiment_3(
             f"Exp3 requires Exp1 bundle at {exp1_dir} — run Experiment 1 first."
         )
 
-    loaded = load_model(model_key)
+    if refusal_bundle_path is not None:
+        refusal_bundle_path = Path(refusal_bundle_path)
+        logger.info(f"[{model_key}] loading refusal direction from {refusal_bundle_path}")
+        refusal = _load_refusal_from_bundle(refusal_bundle_path)
+        loaded = load_model(model_key)
+    else:
+        loaded = load_model(model_key)
 
-    # Optionally sub-sample
-    harmful_list = None
-    harmless_list = None
-    if n_harmful or n_harmless:
-        from mech_spoof.obliteratus_compat import load_prompt_pairs
-        h, l = load_prompt_pairs(source)
-        if n_harmful:
-            h = h[: n_harmful]
-        if n_harmless:
-            l = l[: n_harmless]
-        harmful_list, harmless_list = h, l
+        # Optionally sub-sample
+        harmful_list = None
+        harmless_list = None
+        if n_harmful or n_harmless:
+            from mech_spoof.obliteratus_compat import load_prompt_pairs
+            h, l = load_prompt_pairs(source)
+            if n_harmful:
+                h = h[: n_harmful]
+            if n_harmless:
+                l = l[: n_harmless]
+            harmful_list, harmless_list = h, l
 
-    with timer(f"[{model_key}] compute refusal direction (source={source}, wrap={wrap_mode})"):
-        refusal = compute_refusal_direction(
-            loaded,
-            harmful=harmful_list,
-            harmless=harmless_list,
-            wrap_mode=wrap_mode,
-            source=source,
-            cache_dir=(out_dir / "act_cache_refusal") if cache_activations else None,
-            select_strong_layers=True,
-            batch_size=batch_size,
-            max_length=max_length,
-        )
+        with timer(f"[{model_key}] compute refusal direction (source={source}, wrap={wrap_mode})"):
+            refusal = compute_refusal_direction(
+                loaded,
+                harmful=harmful_list,
+                harmless=harmless_list,
+                wrap_mode=wrap_mode,
+                source=source,
+                cache_dir=(out_dir / "act_cache_refusal") if cache_activations else None,
+                select_strong_layers=True,
+                batch_size=batch_size,
+                max_length=max_length,
+            )
 
     loaded_auth = load_authority_directions(exp1_dir, position=probe_position)
     if loaded_auth is None:

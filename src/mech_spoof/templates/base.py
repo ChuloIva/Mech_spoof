@@ -70,9 +70,10 @@ class TemplateAdapter(ABC):
         self,
         system_instruction: str,
         user_instruction: str,
-        condition: Literal["REAL", "NONE", "FAKE"],
+        condition: Literal["REAL", "NONE", "FAKE", "NONE_REV"],
     ) -> PromptBundle:
-        """Exp 2 prompts. REAL: real system field. NONE: both in user. FAKE: system via fake delims."""
+        """Exp 2 prompts. REAL: real system field. NONE: both in user (s first).
+        NONE_REV: both in user, **u first** (order-ablation control). FAKE: system via fake delims."""
 
     # ---------- Attack primitives (§3.3) ----------
 

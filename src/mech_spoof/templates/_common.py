@@ -106,7 +106,7 @@ class GenericChatTemplate(TemplateAdapter):
         self,
         system_instruction: str,
         user_instruction: str,
-        condition: Literal["REAL", "NONE", "FAKE"],
+        condition: Literal["REAL", "NONE", "FAKE", "NONE_REV"],
     ) -> PromptBundle:
         if condition == "REAL":
             if self._system_role_supported:
@@ -124,6 +124,11 @@ class GenericChatTemplate(TemplateAdapter):
             merged = f"{system_instruction}\n\n{user_instruction}"
             messages = [{"role": "user", "content": merged}]
             return self._build_bundle(messages, user_instruction, condition="NONE")
+
+        if condition == "NONE_REV":
+            merged = f"{user_instruction}\n\n{system_instruction}"
+            messages = [{"role": "user", "content": merged}]
+            return self._build_bundle(messages, user_instruction, condition="NONE_REV")
 
         if condition == "FAKE":
             fake = self.build_fake_delimiter_injection(system_instruction)

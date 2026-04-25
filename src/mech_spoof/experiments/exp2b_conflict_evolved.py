@@ -40,12 +40,14 @@ class Exp2bResult:
     probe_position: str | None
 
 
-def _build_conditions(template, pair: EvolvedConflictPair):
-    """Return (REAL, NONE, FAKE) PromptBundles for one pair."""
+DEFAULT_CONDITIONS: tuple[str, ...] = ("REAL", "NONE", "FAKE")
+
+
+def _build_conditions(template, pair: EvolvedConflictPair, conditions: tuple[str, ...]):
+    """Return PromptBundles for one pair across the given conditions."""
     return {
-        "REAL": template.make_conflict_prompt(pair.s_instruction, pair.u_instruction, "REAL"),
-        "NONE": template.make_conflict_prompt(pair.s_instruction, pair.u_instruction, "NONE"),
-        "FAKE": template.make_conflict_prompt(pair.s_instruction, pair.u_instruction, "FAKE"),
+        cond: template.make_conflict_prompt(pair.s_instruction, pair.u_instruction, cond)
+        for cond in conditions
     }
 
 
@@ -64,6 +66,7 @@ def run_experiment_2b(
     judge_gpu_memory_utilization: float = 0.85,
     judge_enable_thinking: bool = False,
     judge_max_tokens: int = 256,
+    conditions: tuple[str, ...] = DEFAULT_CONDITIONS,
     free_after: bool = True,
 ) -> Exp2bResult:
     """Run Exp 2b end-to-end. Two phases: (1) HF generate + per-layer probe scores via
@@ -101,7 +104,7 @@ def run_experiment_2b(
     template = loaded.template
     flat: list[tuple[EvolvedConflictPair, str, object]] = []
     for p in pairs:
-        bundles = _build_conditions(template, p)
+        bundles = _build_conditions(template, p, conditions)
         for cond, b in bundles.items():
             flat.append((p, cond, b))
 
@@ -267,7 +270,7 @@ def run_experiment_2b(
 
     # ----- 8. Aggregate -----
     summary: dict = {}
-    for cond in ("REAL", "NONE", "FAKE"):
+    for cond in conditions:
         subset = [r for r in rows if r["condition"] == cond]
         judged = [r for r in subset if r["system_followed"] is not None]
         comply = (
@@ -304,7 +307,7 @@ def run_experiment_2b(
             r_overall = _pearson_or_none(xs, ys)
             if r_overall is not None:
                 correlation["overall"] = r_overall
-            for cond in ("REAL", "NONE", "FAKE"):
+            for cond in conditions:
                 sub = [r for r in corr_rows if r["condition"] == cond]
                 if len(sub) >= 3:
                     xs_c = np.array([r["probe_score"] for r in sub])
@@ -329,7 +332,7 @@ def run_experiment_2b(
                 res = _pearson_or_none(col[finite_mask], row_followed[finite_mask])
                 if res is not None:
                     entry["overall"] = res
-            for cond in ("REAL", "NONE", "FAKE"):
+            for cond in conditions:
                 cm = finite_mask & (row_cond == cond)
                 if cm.sum() >= 3:
                     res = _pearson_or_none(col[cm], row_followed[cm])
