@@ -19,6 +19,7 @@ from mech_spoof.utils import get_logger
 logger = get_logger(__name__)
 
 DEFAULT_PATH = DATA_DIR / "conflict_pairs_stratified_1k.jsonl"
+DEFAULT_FULL_PATH = DATA_DIR / "conflict_pairs.jsonl"
 
 
 @dataclass
@@ -30,6 +31,7 @@ class EvolvedConflictPair:
     u_aligned_response: str
     conflict_axis: str
     macro_axis: str
+    original_prompt: str = ""
 
 
 @dataclass
@@ -60,9 +62,65 @@ def load_evolved_conflict_pairs(
                 u_aligned_response=row["u_aligned_response"],
                 conflict_axis=row["conflict_axis"],
                 macro_axis=row.get("macro_axis", "unknown"),
+                original_prompt=row.get("original_prompt", ""),
             ))
     logger.info(f"Loaded {len(pairs)} evolved conflict pairs from {path}")
     return pairs
+
+
+def load_held_out_evolved_pairs(
+    n_held_out: int | None = 200,
+    seed: int = 42,
+    full_path: Path | None = None,
+    train_path: Path | None = None,
+) -> list[EvolvedConflictPair]:
+    """Load evolved conflict pairs that were NOT in the stratified training set.
+
+    Identifies training pairs by their (s_instruction, u_instruction) tuple. Returns
+    a deterministic random sample of size `n_held_out` from the remainder (or all of
+    them if `n_held_out is None`).
+    """
+    full_path = Path(full_path) if full_path else DEFAULT_FULL_PATH
+    train_path = Path(train_path) if train_path else DEFAULT_PATH
+
+    train_keys: set[tuple[str, str]] = set()
+    if train_path.exists():
+        with open(train_path) as f:
+            for line in f:
+                row = json.loads(line)
+                train_keys.add((row["s_instruction"], row["u_instruction"]))
+
+    candidates: list[EvolvedConflictPair] = []
+    with open(full_path) as f:
+        for i, line in enumerate(f):
+            row = json.loads(line)
+            key = (row["s_instruction"], row["u_instruction"])
+            if key in train_keys:
+                continue
+            candidates.append(EvolvedConflictPair(
+                idx=i,
+                s_instruction=row["s_instruction"],
+                u_instruction=row["u_instruction"],
+                s_aligned_response=row["s_aligned_response"],
+                u_aligned_response=row["u_aligned_response"],
+                conflict_axis=row.get("conflict_axis", "unknown"),
+                macro_axis="unknown",  # macro_axis only computed for the stratified set
+                original_prompt=row.get("original_prompt", ""),
+            ))
+
+    logger.info(
+        f"Held-out pool: {len(candidates)} pairs"
+        f" ({len(train_keys)} training pairs excluded)"
+    )
+
+    if n_held_out is None or n_held_out >= len(candidates):
+        return candidates
+
+    import random
+    rng = random.Random(seed)
+    sample = rng.sample(candidates, n_held_out)
+    logger.info(f"Sampled {len(sample)} held-out pairs (seed={seed})")
+    return sample
 
 
 def _truncate(text: str, max_chars: int) -> str:
