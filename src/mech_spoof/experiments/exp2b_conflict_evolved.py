@@ -62,6 +62,8 @@ def run_experiment_2b(
     judge_batch_size: int = 64,
     judge_max_model_len: int = 8192,
     judge_gpu_memory_utilization: float = 0.85,
+    judge_enable_thinking: bool = False,
+    judge_max_tokens: int = 256,
     free_after: bool = True,
 ) -> Exp2bResult:
     """Run Exp 2b end-to-end. Two phases: (1) HF generate + per-layer probe scores via
@@ -193,6 +195,14 @@ def run_experiment_2b(
             h.remove()
         tok.padding_side = original_padding
 
+    # ----- 4b. Persist generations.jsonl so the judge step can be re-run independently -----
+    import json as _json
+    gen_path = out_dir / "generations.jsonl"
+    with open(gen_path, "w") as f:
+        for r in rows:
+            f.write(_json.dumps(r, default=str) + "\n")
+    logger.info(f"[{model_key}] wrote {len(rows)} generations to {gen_path}")
+
     # ----- 5. Free HF model BEFORE loading vLLM judge -----
     free_model(loaded)
     del loaded
@@ -220,6 +230,8 @@ def run_experiment_2b(
             batch_size=judge_batch_size,
             seed=seed,
             free_after=True,
+            enable_thinking=judge_enable_thinking,
+            max_tokens=judge_max_tokens,
         )
 
     for r, v in zip(rows, verdicts):

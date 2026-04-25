@@ -121,15 +121,23 @@ def judge_with_vllm(
     max_tokens: int = 256,
     seed: int = 42,
     free_after: bool = True,
+    enable_thinking: bool = False,
 ) -> list[dict]:
     """Run a vLLM-served judge over each row. Returns one verdict dict per row.
 
     Each output dict has: verdict ('system'/'user'/'both'/'neither'/None), reason, raw.
+
+    For Qwen3+ "thinking" models, `enable_thinking=False` (default) suppresses the
+    <think> block so the model spends its token budget on the JSON verdict instead of
+    rambling. Other tokenizers ignore the kwarg if their chat template doesn't accept it.
     """
     from vllm import LLM, SamplingParams  # lazy import
 
     rows_list = list(rows)
-    logger.info(f"vLLM judge: {len(rows_list)} rows  model={model_id}")
+    logger.info(
+        f"vLLM judge: {len(rows_list)} rows  model={model_id}"
+        f"  enable_thinking={enable_thinking}"
+    )
 
     llm = LLM(
         model=model_id,
@@ -145,13 +153,31 @@ def judge_with_vllm(
         include_stop_str_in_output=True,
     )
 
+    # Probe whether this tokenizer's template accepts enable_thinking.
+    template_supports_thinking = False
+    try:
+        tok.apply_chat_template(
+            [{"role": "user", "content": "ping"}],
+            tokenize=False, add_generation_prompt=True,
+            enable_thinking=False,
+        )
+        template_supports_thinking = True
+    except (TypeError, ValueError):
+        template_supports_thinking = False
+    if not template_supports_thinking and enable_thinking is False:
+        logger.info(
+            f"Tokenizer for {model_id} doesn't accept enable_thinking — "
+            "kwarg will be omitted (model probably doesn't have thinking blocks)."
+        )
+
     def fmt(row: JudgeRow) -> str:
+        kwargs = {"enable_thinking": enable_thinking} if template_supports_thinking else {}
         return tok.apply_chat_template(
             [
                 {"role": "system", "content": JUDGE_SYSTEM},
                 {"role": "user", "content": build_judge_prompt(row)},
             ],
-            tokenize=False, add_generation_prompt=True,
+            tokenize=False, add_generation_prompt=True, **kwargs,
         )
 
     outputs: list[dict] = []
