@@ -363,8 +363,15 @@ def extract_multi_position_with_ppl_batched(
             r_start, r_end = extras.get("response_token_span", (len(ids) - 1, len(ids)))
             if max_length is not None and len(ids) > max_length:
                 ids = ids[:max_length]
+                # Positions are indexed in [0, len(ids)). After truncation we must keep
+                # r_start <= len(ids) - 1, otherwise pos_idx_t will index past the seq
+                # dim of the residual stream / logits and the GPU will fire a device-side
+                # assert (cudaErrorAssert).
+                last_valid = max(0, len(ids) - 1)
                 r_end = min(r_end, len(ids))
-                r_start = min(r_start, r_end)
+                r_start = min(r_start, last_valid)
+                if r_end <= r_start:
+                    r_end = r_start + 1
             items.append({
                 "idx": i,
                 "ids": ids,

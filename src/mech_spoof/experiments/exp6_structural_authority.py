@@ -870,7 +870,7 @@ def run_experiment_6(
     seed: int = 42,
     free_gen_max_tokens: int = 128,
     extract_batch_size: int = 4,
-    extract_max_length: int = 1024,
+    extract_max_length: int = 2048,
     train_fraction: float = 0.75,
     do_fake_transfer: bool = True,
     do_none_conflict_transfer: bool = True,
