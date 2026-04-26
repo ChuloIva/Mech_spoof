@@ -373,3 +373,230 @@ def run_experiment_2b(
         judge_model_id=judge_model_id,
         probe_position=resolved_position,
     )
+
+
+def judge_generations_only(
+    out_dir: Path,
+    model_key: str,
+    exp1_dir: Path | None = None,
+    probe_position: str | None = None,
+    judge_model_id: str = "Qwen/Qwen2.5-7B-Instruct",
+    seed: int = 42,
+    judge_batch_size: int = 64,
+    judge_max_model_len: int = 8192,
+    judge_gpu_memory_utilization: float = 0.85,
+    judge_enable_thinking: bool = False,
+    judge_max_tokens: int = 256,
+    generations_filename: str = "generations.jsonl",
+) -> Exp2bResult:
+    """Recovery: re-run only the vLLM judge + aggregation step on a saved
+    generations.jsonl from a crashed run_experiment_2b. Writes result.json with the
+    same shape as a complete run. Skips the HF model entirely — only loads vLLM.
+
+    Use when run_experiment_2b finished generation (so generations.jsonl exists) but
+    crashed during the judge step (e.g. vllm wasn't installed). If exp1_dir is given,
+    its bundle supplies best_layer / resolved probe position metadata for result.json.
+    """
+    import json as _json
+    from scipy.stats import pearsonr
+
+    set_seed(seed)
+    out_dir = Path(out_dir)
+    gen_path = out_dir / generations_filename
+    if not gen_path.exists():
+        raise FileNotFoundError(f"No generations file at {gen_path}")
+
+    rows: list[dict] = []
+    with open(gen_path) as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            r = _json.loads(line)
+            sbl = r.get("probe_scores_by_layer")
+            if isinstance(sbl, dict):
+                r["probe_scores_by_layer"] = {int(k): float(v) for k, v in sbl.items()}
+            rows.append(r)
+    if not rows:
+        raise ValueError(f"{gen_path} is empty")
+
+    conditions = tuple(dict.fromkeys(r["condition"] for r in rows))
+    layers_tracked = sorted({
+        int(k)
+        for r in rows
+        for k in (r.get("probe_scores_by_layer") or {}).keys()
+    })
+    n_pairs = len({r["pair_idx"] for r in rows})
+
+    best_layer: int | None = None
+    resolved_position: str | None = None
+    if exp1_dir is not None:
+        loaded_dirs = load_authority_directions(exp1_dir, position=probe_position)
+        if loaded_dirs is not None:
+            best_layer_raw, _, resolved_position = loaded_dirs
+            best_layer = int(best_layer_raw) if best_layer_raw is not None else None
+
+    logger.info(
+        f"[{model_key}] judge_generations_only: rows={len(rows)} "
+        f"conditions={conditions} layers={len(layers_tracked)} pairs={n_pairs}"
+    )
+
+    judge_inputs = [
+        JudgeRow(
+            s_instruction=r["s_instruction"],
+            u_instruction=r["u_instruction"],
+            s_gold=r["s_gold"],
+            u_gold=r["u_gold"],
+            response=r["response"],
+            extras={"row_idx": i, "condition": r["condition"], "pair_idx": r["pair_idx"]},
+        )
+        for i, r in enumerate(rows)
+    ]
+    with timer(f"[{model_key}] vLLM judge ({judge_model_id})"):
+        verdicts = judge_with_vllm(
+            judge_inputs,
+            model_id=judge_model_id,
+            max_model_len=judge_max_model_len,
+            gpu_memory_utilization=judge_gpu_memory_utilization,
+            batch_size=judge_batch_size,
+            seed=seed,
+            free_after=True,
+            enable_thinking=judge_enable_thinking,
+            max_tokens=judge_max_tokens,
+        )
+
+    for r, v in zip(rows, verdicts):
+        verdict = v["verdict"]
+        r["judge_verdict"] = verdict
+        r["judge_reason"] = v["reason"]
+        if verdict == "system":
+            r["system_followed"] = True
+        elif verdict == "user":
+            r["system_followed"] = False
+        else:
+            r["system_followed"] = None
+
+    score_matrix = None
+    if layers_tracked:
+        score_matrix = np.full((len(rows), len(layers_tracked)), np.nan, dtype=np.float64)
+        for i, r in enumerate(rows):
+            sbl = r.get("probe_scores_by_layer") or {}
+            for k, l in enumerate(layers_tracked):
+                v = sbl.get(l)
+                if v is not None:
+                    score_matrix[i, k] = v
+        layer_means = np.nanmean(score_matrix, axis=0, keepdims=True)
+        layer_stds = np.nanstd(score_matrix, axis=0, keepdims=True)
+        layer_stds = np.where(layer_stds < 1e-12, 1.0, layer_stds)
+        zs = (score_matrix - layer_means) / layer_stds
+        n_above_mean = (zs > 0).astype(np.int32).sum(axis=1)
+        n_strong = (zs > 1.0).astype(np.int32).sum(axis=1)
+        for i, r in enumerate(rows):
+            r["n_layers_activated_above_mean"] = int(n_above_mean[i])
+            r["n_layers_activated_strong"] = int(n_strong[i])
+
+    summary: dict = {}
+    for cond in conditions:
+        subset = [r for r in rows if r["condition"] == cond]
+        judged = [r for r in subset if r["system_followed"] is not None]
+        comply = (
+            float(np.mean([1 if r["system_followed"] else 0 for r in judged]))
+            if judged else None
+        )
+        scores = [r["probe_score"] for r in subset if r["probe_score"] is not None]
+        summary[cond] = {
+            "compliance_rate": comply,
+            "n": len(subset),
+            "n_judged": len(judged),
+            "n_unjudgable": len(subset) - len(judged),
+            "mean_probe_score": float(np.mean(scores)) if scores else None,
+            "std_probe_score": float(np.std(scores)) if scores else None,
+        }
+
+    correlation: dict = {}
+
+    def _pearson_or_none(x: np.ndarray, y: np.ndarray) -> dict | None:
+        if len(x) < 3 or len(np.unique(y)) < 2:
+            return None
+        r_val, p_val = pearsonr(x, y)
+        return {"r": float(r_val), "p": float(p_val), "n": int(len(x))}
+
+    if layers_tracked:
+        corr_rows = [
+            r for r in rows
+            if r["probe_score"] is not None and r["system_followed"] is not None
+        ]
+        if corr_rows:
+            xs = np.array([r["probe_score"] for r in corr_rows])
+            ys = np.array([1 if r["system_followed"] else 0 for r in corr_rows])
+            r_overall = _pearson_or_none(xs, ys)
+            if r_overall is not None:
+                correlation["overall"] = r_overall
+            for cond in conditions:
+                sub = [r for r in corr_rows if r["condition"] == cond]
+                if len(sub) >= 3:
+                    xs_c = np.array([r["probe_score"] for r in sub])
+                    ys_c = np.array([1 if r["system_followed"] else 0 for r in sub])
+                    res = _pearson_or_none(xs_c, ys_c)
+                    if res is not None:
+                        correlation[cond] = res
+
+        by_layer: dict[int, dict] = {}
+        row_followed = np.array([
+            (1 if r["system_followed"] else 0) if r["system_followed"] is not None else -1
+            for r in rows
+        ])
+        row_cond = np.array([r["condition"] for r in rows])
+        valid_mask = row_followed >= 0
+        for k, l in enumerate(layers_tracked):
+            col = score_matrix[:, k]
+            finite_mask = np.isfinite(col) & valid_mask
+            entry: dict = {}
+            if finite_mask.sum() >= 3:
+                res = _pearson_or_none(col[finite_mask], row_followed[finite_mask])
+                if res is not None:
+                    entry["overall"] = res
+            for cond in conditions:
+                cm = finite_mask & (row_cond == cond)
+                if cm.sum() >= 3:
+                    res = _pearson_or_none(col[cm], row_followed[cm])
+                    if res is not None:
+                        entry[cond] = res
+            if entry:
+                by_layer[int(l)] = entry
+        if by_layer:
+            correlation["by_layer"] = by_layer
+
+    n_judged_total = sum(1 for r in rows if r["system_followed"] is not None)
+    result_json = {
+        "model_key": model_key,
+        "n_pairs": n_pairs,
+        "n_rows": len(rows),
+        "n_judged": n_judged_total,
+        "exp1_best_layer": best_layer,
+        "probe_position": resolved_position,
+        "judge_model_id": judge_model_id,
+        "layers_tracked": layers_tracked,
+        "summary": summary,
+        "correlation": correlation,
+        "rows": rows,
+    }
+    save_result_bundle(
+        out_dir,
+        json_obj=result_json,
+        manifest_extras={
+            "experiment": "exp2b_conflict_evolved",
+            "model_key": model_key,
+            "judge_only_recovery": True,
+        },
+    )
+
+    return Exp2bResult(
+        model_key=model_key,
+        n_pairs=n_pairs,
+        n_judged=n_judged_total,
+        summary=summary,
+        correlation=correlation,
+        judge_model_id=judge_model_id,
+        probe_position=resolved_position,
+    )
