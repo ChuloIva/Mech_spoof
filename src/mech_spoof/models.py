@@ -33,13 +33,17 @@ class LoadedModel:
     n_layers: int
     d_model: int
     nnsight_model: Any = None  # only set for backend="nnsight"
+    # Dotted attribute path from hf_model to the transformer block ModuleList.
+    # "model.layers" for plain causal-LM checkpoints; nested (e.g.
+    # "model.language_model.layers") for VL composite configs like Qwen3.5-VL.
+    layers_path: str = "model.layers"
 
     def layer_module(self, layer_idx: int):
-        """Return the transformer block module at the given layer index.
-
-        Assumes Llama-style architecture: `model.model.layers[i]`. All 5 target families share this.
-        """
-        return self.hf_model.model.layers[layer_idx]
+        """Return the transformer block module at the given layer index."""
+        mod: Any = self.hf_model
+        for part in self.layers_path.split("."):
+            mod = getattr(mod, part)
+        return mod[layer_idx]
 
 
 def load_model(
@@ -62,8 +66,11 @@ def load_model(
     dtype : str, optional
         Override the per-model default dtype.
     """
+    import importlib
+
     import torch
-    from transformers import AutoModelForCausalLM, AutoTokenizer
+    import torch.nn as nn
+    from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
 
     if key not in MODEL_CONFIGS:
         raise KeyError(f"Unknown model key {key!r}. Known: {list(MODEL_CONFIGS)}")
@@ -79,21 +86,77 @@ def load_model(
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token_id = tokenizer.eos_token_id
 
-    hf_model = AutoModelForCausalLM.from_pretrained(
-        cfg.hf_id,
+    # AutoModelForCausalLM trips over composite multimodal configs (e.g. Qwen3.5-VL)
+    # where vocab_size lives under text_config. Detect and route to the architecture
+    # class named in the config; the model still accepts text-only forward calls.
+    pre_cfg = AutoConfig.from_pretrained(cfg.hf_id, trust_remote_code=trust_remote_code)
+    text_cfg = getattr(pre_cfg, "text_config", None)
+    is_composite = text_cfg is not None and not hasattr(pre_cfg, "vocab_size")
+
+    load_kwargs = dict(
         torch_dtype=torch_dtype,
         trust_remote_code=trust_remote_code,
         low_cpu_mem_usage=True,
     )
+    if is_composite:
+        archs = getattr(pre_cfg, "architectures", None) or []
+        ModelClass = None
+        if archs:
+            transformers_mod = importlib.import_module("transformers")
+            ModelClass = getattr(transformers_mod, archs[0], None)
+        if ModelClass is None:
+            try:
+                from transformers import AutoModelForImageTextToText
+                ModelClass = AutoModelForImageTextToText
+            except ImportError as e:
+                raise RuntimeError(
+                    f"Composite config for {cfg.hf_id} (arch={archs}) and neither "
+                    "the named class nor AutoModelForImageTextToText is available."
+                ) from e
+        logger.info(
+            f"Composite config detected — loading via {getattr(ModelClass, '__name__', ModelClass)}"
+        )
+        hf_model = ModelClass.from_pretrained(cfg.hf_id, **load_kwargs)
+    else:
+        hf_model = AutoModelForCausalLM.from_pretrained(cfg.hf_id, **load_kwargs)
     hf_model.to(dev)
     hf_model.eval()
 
     template = get_template(cfg.template, tokenizer)
 
-    # Infer n_layers / d_model from config
+    # Infer n_layers / d_model from config (fall back to text_config for composite)
     hf_cfg = hf_model.config
-    n_layers = getattr(hf_cfg, "num_hidden_layers", None) or getattr(hf_cfg, "n_layer")
-    d_model = getattr(hf_cfg, "hidden_size", None) or getattr(hf_cfg, "n_embd")
+    src_cfg = hf_cfg
+    if not hasattr(src_cfg, "num_hidden_layers") and getattr(src_cfg, "text_config", None):
+        src_cfg = src_cfg.text_config
+    n_layers = getattr(src_cfg, "num_hidden_layers", None) or getattr(src_cfg, "n_layer")
+    d_model = getattr(src_cfg, "hidden_size", None) or getattr(src_cfg, "n_embd")
+
+    # Locate the transformer-block ModuleList. For plain causal-LM checkpoints
+    # this is "model.layers" (Llama/Qwen/Mistral/Gemma/Phi all share it).
+    # For composite VL models the layers list is nested deeper.
+    layers_path = "model.layers"
+    found = False
+    try:
+        probe = hf_model
+        for part in layers_path.split("."):
+            probe = getattr(probe, part)
+        if isinstance(probe, nn.ModuleList) and len(probe) == int(n_layers):
+            found = True
+    except AttributeError:
+        pass
+    if not found:
+        for name, module in hf_model.named_modules():
+            if isinstance(module, nn.ModuleList) and len(module) == int(n_layers):
+                layers_path = name
+                found = True
+                break
+    if not found:
+        raise RuntimeError(
+            f"Could not locate transformer-block ModuleList of length {n_layers} on {cfg.hf_id}"
+        )
+    if layers_path != "model.layers":
+        logger.info(f"Using nested transformer layers at: {layers_path}")
 
     nnsight_model = None
     if backend == "nnsight":
@@ -116,6 +179,7 @@ def load_model(
         n_layers=int(n_layers),
         d_model=int(d_model),
         nnsight_model=nnsight_model,
+        layers_path=layers_path,
     )
 
 
