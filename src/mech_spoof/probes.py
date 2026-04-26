@@ -110,6 +110,171 @@ def compute_authority_direction_dim(
     return out
 
 
+@dataclass
+class DiffMeanProbe:
+    """Mass-mean probe (Marks & Tegmark, COLM 2024) for one layer.
+
+    Stores both the unit direction (for cosine comparison and projection scoring) and
+    `raw_direction = mean_A - mean_B` so callers can pick a natural intervention scale.
+    """
+
+    direction: np.ndarray       # unit vector, shape (d_model,)
+    midpoint: np.ndarray        # (mean_A + mean_B) / 2
+    raw_direction: np.ndarray   # un-normalised mean_A - mean_B
+    mean_A: np.ndarray
+    mean_B: np.ndarray
+    n_A: int
+    n_B: int
+    layer: int
+
+    def score_batch(self, X: np.ndarray) -> np.ndarray:
+        """Project X (n, d) onto the direction, centred on the midpoint."""
+        return (X - self.midpoint[np.newaxis, :]) @ self.direction
+
+    def classify_batch(self, X: np.ndarray) -> np.ndarray:
+        return (self.score_batch(X) > 0).astype(int)
+
+    def accuracy(self, X: np.ndarray, labels: np.ndarray) -> float:
+        return float(np.mean(self.classify_batch(X) == labels))
+
+    @property
+    def natural_scale(self) -> float:
+        """||mean_A - mean_B|| — intervention strength of "one full centroid shift"."""
+        return float(np.linalg.norm(self.raw_direction))
+
+
+def fit_diff_mean_probes(
+    acts_A: np.ndarray,        # (n_A, n_layers, d_model)
+    acts_B: np.ndarray,        # (n_B, n_layers, d_model)
+) -> dict[int, DiffMeanProbe]:
+    """Fit one MM probe per layer. No normalisation — matches the reference paper."""
+    assert acts_A.ndim == 3 and acts_B.ndim == 3
+    assert acts_A.shape[1:] == acts_B.shape[1:]
+    n_layers = acts_A.shape[1]
+    out: dict[int, DiffMeanProbe] = {}
+    for layer in range(n_layers):
+        X_A = acts_A[:, layer, :]
+        X_B = acts_B[:, layer, :]
+        mean_A = X_A.mean(axis=0)
+        mean_B = X_B.mean(axis=0)
+        raw = mean_A - mean_B
+        norm = float(np.linalg.norm(raw))
+        unit = raw / (norm + 1e-10) if norm > 1e-10 else np.zeros_like(raw)
+        out[layer] = DiffMeanProbe(
+            direction=unit,
+            midpoint=(mean_A + mean_B) / 2,
+            raw_direction=raw,
+            mean_A=mean_A,
+            mean_B=mean_B,
+            n_A=acts_A.shape[0],
+            n_B=acts_B.shape[0],
+            layer=layer,
+        )
+    return out
+
+
+def fit_diff_mean_multi_layer(
+    acts_A: np.ndarray,
+    acts_B: np.ndarray,
+    layers: list[int],
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Concatenate activations across `layers` and fit one MM probe in the joint space.
+
+    Returns (unit_direction, midpoint, raw_direction). Useful for picking up
+    layer-disagreement structure that single-layer probes miss.
+    """
+    X_A = np.concatenate([acts_A[:, l, :] for l in layers], axis=1)
+    X_B = np.concatenate([acts_B[:, l, :] for l in layers], axis=1)
+    mean_A = X_A.mean(axis=0)
+    mean_B = X_B.mean(axis=0)
+    raw = mean_A - mean_B
+    norm = float(np.linalg.norm(raw))
+    unit = raw / (norm + 1e-10) if norm > 1e-10 else np.zeros_like(raw)
+    midpoint = (mean_A + mean_B) / 2
+    return unit, midpoint, raw
+
+
+def score_multi_layer(
+    acts: np.ndarray,        # (n, n_layers_total, d_model)
+    direction: np.ndarray,
+    midpoint: np.ndarray,
+    layers: list[int],
+) -> np.ndarray:
+    X = np.concatenate([acts[:, l, :] for l in layers], axis=1)
+    return (X - midpoint[np.newaxis, :]) @ direction
+
+
+def intervene_along_direction(
+    loaded,
+    input_ids,
+    direction: np.ndarray,
+    layer: int,
+    alpha: float,
+    positions: list[int] | int | None = None,
+    max_new_tokens: int = 128,
+):
+    """Generate from `loaded.hf_model` while adding `alpha * direction` to layer `layer`'s
+    residual stream at the specified position(s).
+
+    Parameters
+    ----------
+    loaded : LoadedModel
+    input_ids : 1D or 2D long tensor / list
+    direction : unit vector in residual space (shape d_model)
+    layer : which transformer block to intervene at
+    alpha : scalar — typically a multiple of probe.natural_scale
+    positions : token positions to perturb. None → all positions in the prompt.
+                During generation the cached positions list is used; new tokens
+                are not perturbed (the intervention is applied only on the prompt
+                pass).
+    max_new_tokens : passed to model.generate
+
+    Returns the generated token ids (including prompt).
+    """
+    import torch
+
+    if not isinstance(input_ids, torch.Tensor):
+        input_ids = torch.tensor(input_ids, dtype=torch.long)
+    if input_ids.ndim == 1:
+        input_ids = input_ids.unsqueeze(0)
+    input_ids = input_ids.to(loaded.device)
+    prompt_len = int(input_ids.shape[1])
+
+    direction_t = torch.tensor(direction, dtype=torch.float32, device=loaded.device)
+
+    if isinstance(positions, int):
+        positions = [positions]
+
+    def _hook(_mod, _inp, out):
+        h = out[0] if isinstance(out, tuple) else out
+        # h: (b, s, d). Only perturb the prompt forward pass; during incremental decode
+        # the seq dim is 1 and we leave it untouched.
+        if h.shape[1] != prompt_len:
+            return out
+        if positions is None:
+            h = h + alpha * direction_t.to(h.dtype)
+        else:
+            h = h.clone()
+            for p in positions:
+                if 0 <= p < h.shape[1]:
+                    h[:, p, :] = h[:, p, :] + alpha * direction_t.to(h.dtype)
+        return (h,) + out[1:] if isinstance(out, tuple) else h
+
+    module = loaded.layer_module(layer)
+    handle = module.register_forward_hook(_hook)
+    try:
+        with torch.no_grad():
+            gen = loaded.hf_model.generate(
+                input_ids=input_ids,
+                max_new_tokens=max_new_tokens,
+                do_sample=False,
+                pad_token_id=loaded.tokenizer.pad_token_id or loaded.tokenizer.eos_token_id,
+            )
+    finally:
+        handle.remove()
+    return gen
+
+
 def find_best_layer(accuracies: dict[int, float]) -> int:
     """Return layer index with highest probe accuracy. Ties: earliest."""
     return max(accuracies.items(), key=lambda kv: (kv[1], -kv[0]))[0]

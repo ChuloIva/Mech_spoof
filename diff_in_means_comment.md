@@ -1,0 +1,7 @@
+Now I have a thorough understanding of the method. Let me write the implementation guide.The write-up covers the full pipeline. A few things worth highlighting about why this matters specifically for where your project is right now:
+
+**The causal intervention piece is the most important section for you.** Your exp2d just showed that your current probe direction encodes position, not authority. When you retrain with the REAL-only structural contrast (path 2), the MM direction gives you something you can immediately test causally: take a prompt where the model ignores its system prompt, add the direction to the residual stream, and see if the model starts following the system prompt. If it does, you've gone from "we found a correlational signal that turned out to be positional" to "we found a causal direction that controls instruction privilege." That's a completely different paper.
+
+**The comparison with your existing LR probes is easy to do.** Just compute cosine similarity between your exp1b LR weight vector and the MM direction at the same layer. If they're nearly parallel, LR wasn't doing anything that MM doesn't do more simply. If they diverge, LR was picking up on something extra — possibly the positional feature that exp2d exposed.
+
+**The multi-layer ensemble in Section 9 directly addresses your layer 8 mystery.** If layer 8 encodes an opposing signal, a multi-layer concatenated probe can capture the full layer-8-opposes-layer-17 structure in a single direction vector. The single-layer probe at layer 17 misses whatever layer 8 is contributing.
