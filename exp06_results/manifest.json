@@ -1,0 +1,10 @@
+{
+  "timestamp": "2026-04-26T14:30:00.389907+00:00",
+  "git_sha": null,
+  "gpu_name": "NVIDIA A100-SXM4-80GB",
+  "torch_version": "2.10.0+cu128",
+  "torch_cuda": "12.8",
+  "torch_hip": null,
+  "experiment": "exp6_structural_authority",
+  "model_key": "qwen"
+}

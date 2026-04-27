@@ -1,0 +1,10 @@
+2026-04-26 19:45:54,523 | mech_spoof.models | INFO | Loading Qwen/Qwen3.5-4B on mps dtype=bfloat16 backend=hf_hooks
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-04-26 19:45:56,341 | mech_spoof.models | INFO | Composite config detected — loading via Qwen3_5ForConditionalGeneration
+[info] 7 attack prompts (1 from CSV, 6 baselines)
+[info] loading model…
+Fetching 2 files:   0%|          | 0/2 [00:00<?, ?it/s]Fetching 2 files: 100%|██████████| 2/2 [00:00<00:00, 2229.83it/s]
+[transformers] The fast path is not available because one of the required library is not installed. Falling back to torch implementation. To install follow https://github.com/fla-org/flash-linear-attention#installation and https://github.com/Dao-AILab/causal-conv1d
+Loading weights:   0%|          | 0/723 [00:00<?, ?it/s]Loading weights: 100%|██████████| 723/723 [00:00<00:00, 7598.55it/s]
+/Users/ivanculo/.local/share/uv/python/cpython-3.12.10-macos-aarch64-none/lib/python3.12/multiprocessing/resource_tracker.py:279: UserWarning: resource_tracker: There appear to be 1 leaked semaphore objects to clean up at shutdown
+  warnings.warn('resource_tracker: There appear to be %d '
