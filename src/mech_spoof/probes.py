@@ -275,6 +275,132 @@ def intervene_along_direction(
     return gen
 
 
+class ResidualSteerer:
+    """Multi-layer residual-stream steering via forward hooks.
+
+    Adds ``coeff * directions[layer]`` to the post-block residual at every
+    forward pass (prefill **and** incremental decode), at every position. This
+    matches the repeng `ControlModel` semantics but stays out of the model's
+    module tree — hooks register on `loaded.layer_module(layer)` and are
+    cleanly removed on exit.
+
+    Parameters
+    ----------
+    loaded : LoadedModel
+    directions : dict[int, np.ndarray]
+        Per-layer residual-stream direction (shape `(d_model,)`). Typically the
+        unit MM direction; raw / un-normalised is also fine, the caller picks
+        the scale.
+    coeff : float
+        Scalar applied to every layer's direction. Negative inverts the steer.
+    every_token : bool, default True
+        True → perturb every position. False → only the *last* position of the
+        current forward (useful for single-token interventions).
+    normalize : bool, default False
+        If True, rescale the post-perturbation residual back to its
+        pre-perturbation L2 norm at each position (repeng's "normalize" flag).
+
+    Use as a context manager::
+
+        with ResidualSteerer(loaded, directions, coeff=2.0):
+            out = loaded.hf_model.generate(...)
+    """
+
+    def __init__(
+        self,
+        loaded,
+        directions: "dict[int, np.ndarray]",
+        coeff: float = 1.0,
+        every_token: bool = True,
+        normalize: bool = False,
+    ):
+        import torch
+
+        self.loaded = loaded
+        self.coeff = float(coeff)
+        self.every_token = bool(every_token)
+        self.normalize = bool(normalize)
+        self._handles: list = []
+        self._tensors: dict[int, "torch.Tensor"] = {
+            int(l): torch.tensor(v, dtype=torch.float32, device=loaded.device)
+            for l, v in directions.items()
+        }
+
+    def _make_hook(self, layer_idx: int):
+        import torch
+
+        d = self._tensors[layer_idx]
+        coeff = self.coeff
+        every_token = self.every_token
+        normalize = self.normalize
+
+        def _hook(_mod, _inp, out):
+            h = out[0] if isinstance(out, tuple) else out
+            delta = (coeff * d).to(h.dtype)
+            if normalize:
+                pre_norm = torch.norm(h, dim=-1, keepdim=True)
+            if every_token:
+                h2 = h + delta.view(1, 1, -1)
+            else:
+                h2 = h.clone()
+                h2[:, -1, :] = h2[:, -1, :] + delta
+            if normalize:
+                post_norm = torch.norm(h2, dim=-1, keepdim=True)
+                h2 = h2 / (post_norm + 1e-8) * pre_norm
+            return (h2,) + out[1:] if isinstance(out, tuple) else h2
+
+        return _hook
+
+    def __enter__(self):
+        for layer_idx in self._tensors:
+            handle = self.loaded.layer_module(layer_idx).register_forward_hook(
+                self._make_hook(layer_idx)
+            )
+            self._handles.append(handle)
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        for h in self._handles:
+            h.remove()
+        self._handles.clear()
+        return False
+
+
+def steered_generate(
+    loaded,
+    input_ids,
+    directions: "dict[int, np.ndarray]",
+    coeff: float,
+    max_new_tokens: int = 128,
+    do_sample: bool = False,
+    normalize: bool = False,
+    **gen_kwargs,
+):
+    """Generate from `loaded.hf_model` with multi-layer residual steering applied.
+
+    Returns the full token sequence (prompt + generation) as in `model.generate`.
+    """
+    import torch
+
+    if not isinstance(input_ids, torch.Tensor):
+        input_ids = torch.tensor(input_ids, dtype=torch.long)
+    if input_ids.ndim == 1:
+        input_ids = input_ids.unsqueeze(0)
+    input_ids = input_ids.to(loaded.device)
+
+    pad = loaded.tokenizer.pad_token_id or loaded.tokenizer.eos_token_id
+    with ResidualSteerer(loaded, directions, coeff=coeff, normalize=normalize):
+        with torch.no_grad():
+            out = loaded.hf_model.generate(
+                input_ids=input_ids,
+                max_new_tokens=max_new_tokens,
+                do_sample=do_sample,
+                pad_token_id=pad,
+                **gen_kwargs,
+            )
+    return out
+
+
 def find_best_layer(accuracies: dict[int, float]) -> int:
     """Return layer index with highest probe accuracy. Ties: earliest."""
     return max(accuracies.items(), key=lambda kv: (kv[1], -kv[0]))[0]
