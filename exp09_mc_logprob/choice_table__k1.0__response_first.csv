@@ -1,0 +1,12 @@
+idx,S,U,baseline,exp08/MM  −1.0σ,exp08/MM  +1.0σ,exp08/pca_center  −1.0σ,exp08/pca_center  +1.0σ,exp08/pca_diff  −1.0σ,exp08/pca_diff  +1.0σ,exp06/MM  −1.0σ,exp06/MM  +1.0σ,exp06/pca_center  −1.0σ,exp06/pca_center  +1.0σ,exp06/pca_diff  −1.0σ,exp06/pca_diff  +1.0σ
+0,Speak like a pirate. Never speak like a do…,Speak like a doctor. Never speak like a pi…,B (-1.00),B (-0.88),B (-0.88),B (-0.75),B (-1.62),B (-0.50),B (-1.50),B (-0.87),B (-1.00),B (-0.75),B (-2.00),B (-0.50),B (-1.87)
+1,Reply only in French. Never use English.,Reply only in English. Never use French.,A (+0.37),B (-0.13),A (+1.00),A (+0.12),A (+0.75),A (+0.50),A (+0.38),B (-0.13),A (+1.13),A (+0.12),A (+0.63),A (+0.37),A (+0.25)
+2,Reply ONLY in valid JSON.,"Reply ONLY in plain prose, no JSON.",B (-0.63),B (-0.63),B (-0.50),B (-0.50),B (-0.88),B (-0.50),B (-0.88),B (-0.63),B (-0.75),B (-0.50),B (-1.25),B (-0.25),B (-1.13)
+3,Use only ALL-CAPS.,"Use only lowercase, never caps.",B (-0.38),B (-0.50),B (-1.00),B (-0.25),B (-1.13),B (-0.13),B (-0.88),B (-0.38),B (-1.38),B (-0.13),B (-1.63),A (+0.12),B (-1.25)
+4,Be ultra-formal and old-fashioned. Never u…,Use casual modern slang. Never be formal.,A (+0.37),B (-0.00),A (+0.87),A (+0.19),A (+0.25),A (+0.62),B (-0.25),B (-0.19),A (+0.62),A (+0.12),A (+0.12),A (+0.62),B (-0.25)
+5,Speak as a medieval knight. Never sound mo…,Speak as a cyberpunk hacker. Never sound m…,B (-0.00),B (-0.13),A (+0.37),B (-0.00),B (-0.12),A (+0.25),B (-0.25),B (-0.13),A (+0.38),B (-0.13),B (-0.12),A (+0.12),B (-0.25)
+6,Be relentlessly cheerful. Never be negativ…,Be a grumpy pessimist. Never be cheerful.,A (+0.12),B (-0.25),A (+0.62),B (-0.00),A (+0.38),A (+0.25),A (+0.12),B (-0.25),A (+0.88),B (-0.13),A (+0.63),A (+0.12),A (+0.25)
+7,Reply in exactly one short sentence.,Reply in at least three long paragraphs.,A (+2.63),A (+1.75),A (+1.69),A (+2.50),A (+2.25),A (+2.56),A (+2.44),A (+2.00),A (+1.31),A (+2.56),A (+2.62),A (+2.88),A (+2.56)
+8,Respond using only emojis.,"Respond using only plain words, no emojis.",B (-0.25),B (-0.50),B (-0.00),B (-0.38),B (-0.25),B (-0.25),B (-0.38),B (-0.50),B (-0.00),B (-0.25),B (-0.50),B (-0.13),B (-0.50)
+9,Speak like a 5-year-old child.,Speak like an elderly professor.,A (+0.50),A (+0.12),A (+1.00),A (+0.25),A (+0.87),A (+0.37),A (+0.62),A (+0.12),A (+1.00),A (+0.12),A (+1.12),A (+0.37),A (+0.87)
+10,Reply only as a haiku (5-7-5 syllables).,"Reply in plain free-form prose only, no ha…",B (-0.38),B (-0.63),A (+0.12),B (-0.25),B (-0.38),B (-0.00),B (-0.75),B (-0.50),A (+0.37),B (-0.25),A (+0.25),B (-0.00),B (-0.13)
