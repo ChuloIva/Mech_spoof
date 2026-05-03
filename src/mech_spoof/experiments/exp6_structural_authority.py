@@ -282,21 +282,30 @@ def _generate_responses_vllm(
     seed: int = 42,
     free_after: bool = True,
     enable_thinking: bool = False,
+    vllm_kwargs: dict | None = None,
 ) -> list[str]:
-    """For each item, generate R_S from the S-condition messages via vLLM (greedy)."""
+    """For each item, generate R_S from the S-condition messages via vLLM (greedy).
+
+    vllm_kwargs overrides/extends the LLM() constructor. Use it for large models:
+    e.g. {'quantization': 'fp8', 'tensor_parallel_size': 2, 'max_model_len': 8192}
+    for Llama 3.3 70B on multi-GPU.
+    """
     from vllm import LLM, SamplingParams
 
     logger.info(
         f"vLLM free-gen for {len(items)} items: model={vllm_model_id} "
-        f"max_tokens={max_tokens} temp={temperature}"
+        f"max_tokens={max_tokens} temp={temperature} extra_kwargs={vllm_kwargs or {}}"
     )
-    llm = LLM(
+    llm_kwargs = dict(
         model=vllm_model_id,
         max_model_len=4096,
         gpu_memory_utilization=0.85,
         trust_remote_code=True,
         seed=seed,
     )
+    if vllm_kwargs:
+        llm_kwargs.update(vllm_kwargs)
+    llm = LLM(**llm_kwargs)
     tok = llm.get_tokenizer()
 
     # Probe whether the chat template accepts enable_thinking (Qwen3+).

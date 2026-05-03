@@ -52,6 +52,7 @@ def load_model(
     device: str = "auto",
     dtype: str | None = None,
     trust_remote_code: bool = True,
+    quantization: str | None = None,
 ) -> LoadedModel:
     """Load one of the configured models.
 
@@ -63,8 +64,12 @@ def load_model(
         "hf_hooks" (default, recommended) or "nnsight".
     device : str
         "auto" picks cuda/mps/cpu. Pass explicit string to override.
+        Ignored when quantization is set (device_map="auto" is used instead).
     dtype : str, optional
         Override the per-model default dtype.
+    quantization : str, optional
+        Override the per-model default quantization. None | "8bit" | "4bit".
+        When set, requires `bitsandbytes` and uses device_map="auto".
     """
     import importlib
 
@@ -76,11 +81,15 @@ def load_model(
         raise KeyError(f"Unknown model key {key!r}. Known: {list(MODEL_CONFIGS)}")
     cfg = MODEL_CONFIGS[key]
 
-    dev = pick_device(device)
+    quant = quantization if quantization is not None else cfg.quantization
+    dev = pick_device(device) if quant is None else "cuda"  # quant uses device_map="auto"
     torch_dtype_str = dtype or cfg.dtype
     torch_dtype = getattr(torch, torch_dtype_str)
 
-    logger.info(f"Loading {cfg.hf_id} on {dev} dtype={torch_dtype_str} backend={backend}")
+    logger.info(
+        f"Loading {cfg.hf_id} on {dev} dtype={torch_dtype_str} "
+        f"backend={backend} quantization={quant or 'none'}"
+    )
 
     tokenizer = AutoTokenizer.from_pretrained(cfg.hf_id, trust_remote_code=trust_remote_code)
     if tokenizer.pad_token_id is None:
@@ -98,6 +107,29 @@ def load_model(
         trust_remote_code=trust_remote_code,
         low_cpu_mem_usage=True,
     )
+    if quant is not None:
+        try:
+            from transformers import BitsAndBytesConfig
+        except ImportError as e:
+            raise RuntimeError(
+                "quantization requested but BitsAndBytesConfig unavailable. "
+                "Install with: pip install bitsandbytes accelerate"
+            ) from e
+        if quant == "8bit":
+            bnb_cfg = BitsAndBytesConfig(load_in_8bit=True)
+        elif quant == "4bit":
+            bnb_cfg = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_compute_dtype=torch_dtype,
+                bnb_4bit_use_double_quant=True,
+            )
+        else:
+            raise ValueError(f"unknown quantization {quant!r}; use '8bit' or '4bit'")
+        load_kwargs["quantization_config"] = bnb_cfg
+        load_kwargs["device_map"] = "auto"
+        # torch_dtype is consumed by BNB's compute_dtype path; keep for clarity.
+
     if is_composite:
         archs = getattr(pre_cfg, "architectures", None) or []
         ModelClass = None
@@ -119,7 +151,8 @@ def load_model(
         hf_model = ModelClass.from_pretrained(cfg.hf_id, **load_kwargs)
     else:
         hf_model = AutoModelForCausalLM.from_pretrained(cfg.hf_id, **load_kwargs)
-    hf_model.to(dev)
+    if quant is None:
+        hf_model.to(dev)
     hf_model.eval()
 
     template = get_template(cfg.template, tokenizer)

@@ -32,6 +32,11 @@ class ModelConfig:
     dtype: str = "bfloat16"
     best_layer_hint: int | None = None
     notes: str = ""
+    # Optional bitsandbytes quantization. None = full precision (per `dtype`).
+    # "8bit" → BitsAndBytesConfig(load_in_8bit=True); "4bit" → load_in_4bit=True (NF4).
+    # When set, load_model uses device_map="auto" (skips manual .to(device)) so
+    # the model can span multiple GPUs / offload — required for very large models.
+    quantization: str | None = None
 
     @property
     def results_dir(self) -> Path:
@@ -53,6 +58,27 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         slug="llama3_8b",
         dtype="bfloat16",
     ),
+    "llama33_70b": ModelConfig(
+        key="llama33_70b",
+        hf_id="meta-llama/Llama-3.3-70B-Instruct",
+        template="llama3",
+        slug="llama33_70b",
+        dtype="bfloat16",
+        quantization="8bit",
+        notes=(
+            "Llama 3.3 70B Instruct, loaded 8-bit via bitsandbytes (~70 GB VRAM, "
+            "fits A100 80GB / H100 80GB single-GPU). Reuses the llama3 template "
+            "(same <|start_header_id|>...<|end_header_id|> chat format). "
+            "Target for the cross-direction comparison demo: pre-computed "
+            "Goodfire SAE at L50 (Goodfire/Llama-3.3-70B-Instruct-SAE-l50, on "
+            "Neuronpedia w/ auto-interp), pre-computed Assistant Axis at "
+            "lu-christina/assistant-axis-vectors/llama-3.3-70b/, and refusal "
+            "direction from huihui-ai/Llama-3.3-70B-Instruct-abliterated. "
+            "8-bit quantization adds noise vs the bf16 activations Goodfire's "
+            "SAE was trained on — direction-fitting still works, but SAE "
+            "feature-projection accuracy degrades modestly."
+        ),
+    ),
     "mistral": ModelConfig(
         key="mistral",
         hf_id="mistralai/Mistral-7B-Instruct-v0.3",
@@ -66,6 +92,37 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         template="gemma",
         slug="gemma2_9b",
         dtype="bfloat16",
+    ),
+    "gemma3_4b": ModelConfig(
+        key="gemma3_4b",
+        hf_id="google/gemma-3-4b-it",
+        template="gemma",
+        slug="gemma3_4b",
+        dtype="bfloat16",
+        notes=(
+            "Gemma 3 4B Instruction-Tuned. Composite multimodal config "
+            "(Gemma3ForConditionalGeneration); model loader's composite path handles it. "
+            "Same <start_of_turn>/<end_of_turn> template as Gemma 2 — reuses the gemma adapter. "
+            "CAVEAT for exp06: Gemma's template folds system content into the first user turn, "
+            "so S and U conditions differ only by a newline at the token level. Direction "
+            "fitted on this model captures structural punctuation, not role authority — useful "
+            "as a negative control, not as a headline result. "
+            "Has Gemma Scope 2 SAEs + transcoders + crosscoders on Neuronpedia."
+        ),
+    ),
+    "qwen3_4b": ModelConfig(
+        key="qwen3_4b",
+        hf_id="Qwen/Qwen3-4B",
+        template="chatml",
+        slug="qwen3_4b",
+        dtype="bfloat16",
+        notes=(
+            "Qwen3-4B (NOT Qwen3.5-4B). Plain text decoder, 36 layers, d_model=2560, "
+            "ChatML template with native system role. Refit target for SAE-projection "
+            "demo: Hanna & Piotrowski transcoders at https://hf.co/mwhanna/qwen3-4b-transcoders "
+            "(layer_0..layer_35.safetensors, ~1.68 GB each, 164k MLP-output features). "
+            "Auto-interp on Neuronpedia at /qwen3-4b/{0,23,30}-transcoder-hp."
+        ),
     ),
     "phi3": ModelConfig(
         key="phi3",
