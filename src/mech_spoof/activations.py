@@ -418,8 +418,9 @@ def extract_multi_position_with_ppl_batched(
             # Per-row gather: shape (n_pos, n_layers, d)
             gathered = np.zeros((n_pos, n_layers, d_model), dtype=np.float32)
             for li in range(n_layers):
-                h = storage[li][row]  # (s, d)
-                vecs = h[pos_idx_t[row]]  # (n_pos, d)
+                h = storage[li][row]  # (s, d) — may live on a different cuda device when device_map='auto'
+                idx = pos_idx_t[row] if pos_idx_t.device == h.device else pos_idx_t[row].to(h.device)
+                vecs = h[idx]  # (n_pos, d)
                 gathered[:, li, :] = vecs.float().cpu().numpy()
 
             # Perplexity over the response span.
@@ -428,6 +429,8 @@ def extract_multi_position_with_ppl_batched(
             if r_end_p > r_start_p and r_start_p >= 1:
                 logit_slice = logits[row, r_start_p - 1: r_end_p - 1, :].float()
                 target_slice = input_ids_t[row, r_start_p: r_end_p]
+                if target_slice.device != logit_slice.device:
+                    target_slice = target_slice.to(logit_slice.device)
                 loss = torch.nn.functional.cross_entropy(
                     logit_slice, target_slice, reduction="mean"
                 )
