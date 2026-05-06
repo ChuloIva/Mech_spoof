@@ -53,6 +53,8 @@ def load_model(
     dtype: str | None = None,
     trust_remote_code: bool = True,
     quantization: str | None = None,
+    device_map: str | dict | None = None,
+    max_memory: dict | None = None,
 ) -> LoadedModel:
     """Load one of the configured models.
 
@@ -81,7 +83,15 @@ def load_model(
         raise KeyError(f"Unknown model key {key!r}. Known: {list(MODEL_CONFIGS)}")
     cfg = MODEL_CONFIGS[key]
 
-    quant = quantization if quantization is not None else cfg.quantization
+    # quantization=None        → fall back to cfg.quantization (per-model default)
+    # quantization='none'/False → explicitly disable, even if cfg sets a default
+    # quantization='8bit'/'4bit' → force that specific scheme
+    if quantization is None:
+        quant = cfg.quantization
+    elif quantization is False or (isinstance(quantization, str) and quantization.lower() == "none"):
+        quant = None
+    else:
+        quant = quantization
     dev = pick_device(device) if quant is None else "cuda"  # quant uses device_map="auto"
     torch_dtype_str = dtype or cfg.dtype
     torch_dtype = getattr(torch, torch_dtype_str)
@@ -127,8 +137,15 @@ def load_model(
         else:
             raise ValueError(f"unknown quantization {quant!r}; use '8bit' or '4bit'")
         load_kwargs["quantization_config"] = bnb_cfg
-        load_kwargs["device_map"] = "auto"
+        load_kwargs["device_map"] = device_map if device_map is not None else "auto"
+        if max_memory is not None:
+            load_kwargs["max_memory"] = max_memory
         # torch_dtype is consumed by BNB's compute_dtype path; keep for clarity.
+    elif device_map is not None:
+        # Unquantized multi-GPU sharding (e.g. 70B bf16 across 2× 80GB).
+        load_kwargs["device_map"] = device_map
+        if max_memory is not None:
+            load_kwargs["max_memory"] = max_memory
 
     if is_composite:
         archs = getattr(pre_cfg, "architectures", None) or []
@@ -151,7 +168,7 @@ def load_model(
         hf_model = ModelClass.from_pretrained(cfg.hf_id, **load_kwargs)
     else:
         hf_model = AutoModelForCausalLM.from_pretrained(cfg.hf_id, **load_kwargs)
-    if quant is None:
+    if quant is None and device_map is None:
         hf_model.to(dev)
     hf_model.eval()
 
