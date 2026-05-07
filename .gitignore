@@ -31,6 +31,11 @@ cache/
 *.npy
 *.npz
 !data/**/*.npz
+# Steering directions — small (≤ 11 MB each), needed for nb 09/15 + Colab runs.
+!exp06_pca_directions.npz
+!exp06_results/arrays.npz
+!exp08_directions/directions.npz
+!exp_directions_qwen35_4b/directions.npz
 
 # Jupyter
 .ipynb_checkpoints/
