@@ -99,7 +99,7 @@ def patch_existing_auth_cell(nb: dict) -> None:
             if stripped.startswith("assert os.environ.get('HF_TOKEN')"):
                 skip = True
                 continue
-            if skip and stripped.endswith("'HF_TOKEN required (Llama 3.3 is gated).'"):
+            if skip and stripped.startswith("'HF_TOKEN required"):
                 skip = False
                 continue
             if stripped == 'from huggingface_hub import login':

@@ -102,6 +102,11 @@ def port_14() -> None:
          "is gated. **Tokens needed.** `HF_TOKEN` (Llama 3.3 is gated)"),
         (r"`Qwen/Qwen3\.5-4B` is not gated\.",
          "`meta-llama/Llama-3.3-70B-Instruct` is gated; set `HF_TOKEN`."),
+        # Stale "is not gated" hedges in inline comments / docstrings
+        (r"Llama 3\.3 70B is not gated, but if you swap models pick this up automatically\.",
+         "Llama 3.3 70B is gated — paste your `HF_TOKEN` in §1c above."),
+        (r"is not gated, but if you swap models pick this up automatically\.",
+         "is gated — paste your `HF_TOKEN` in §1c above."),
         # Subtle: notebook references "exp06_results/" comparison
         (r"`exp06_results/`", "`exp06_lamma/`"),
         # Misc references to "qwen" in docs
@@ -150,7 +155,7 @@ def port_15() -> None:
         # Path-existence check list (do these BEFORE we rename EXP6_PCA → EXP6_NPZ
         # so the line-strings still match cleanly).
         (r"'exp06_pca_directions\.npz',", "'exp06_lamma/directions.npz',"),
-        (r"'exp06_results/arrays\.npz',\s*\n", ""),
+        (r"^[ \t]*'exp06_results/arrays\.npz',[ \t]*\n", ""),
         (r"'exp_directions_qwen35_4b/directions\.npz',",
          "'exp_directions_llama33_70b/directions.npz',"),
         # Path-print pairs — fold both old vars (EXP6_PCA, EXP6_ARRAYS) into a single EXP6_NPZ entry
@@ -237,7 +242,7 @@ def port_16() -> None:
         (r"all 32 layers",     "all 80 layers"),
         # Path-existence list (BEFORE EXP6_PCA→EXP6_NPZ rename)
         (r"'exp06_pca_directions\.npz',", "'exp06_lamma/directions.npz',"),
-        (r"'exp06_results/arrays\.npz',\s*\n", ""),
+        (r"^[ \t]*'exp06_results/arrays\.npz',[ \t]*\n", ""),
         (r"'exp_directions_qwen35_4b/directions\.npz',",
          "'exp_directions_llama33_70b/directions.npz',"),
         # Path-print pairs — fold both old vars into one (do BEFORE the bare-var rename)
