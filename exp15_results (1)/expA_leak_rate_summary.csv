@@ -1,0 +1,4 @@
+hardening,baseline,SU −0.3σ,SU −0.15σ,SU +0.15σ,SU +0.3σ,refusal −0.2σ,refusal −0.1σ,refusal +0.1σ,refusal +0.2σ
+soft,0.6,0.8,0.6,0.2,0.0,1.0,0.8,,
+medium,0.0,0.4,0.2,0.0,0.0,0.0,1.0,,
+hard,0.0,0.0,0.0,0.0,0.0,,1.0,,

@@ -1,0 +1,128 @@
+{
+  "experiment": "15_jailbreak_steering",
+  "model": "Qwen/Qwen3.5-4B",
+  "steer_layers": [
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31
+  ],
+  "positions": {
+    "SU": "response_first",
+    "refusal": -1
+  },
+  "sigma": {
+    "SU": 0.6402460336685181,
+    "refusal": 18.455551147460938
+  },
+  "cos_SU_refusal_per_layer": {
+    "16": -0.05200234800577164,
+    "17": -0.09066736698150635,
+    "18": -0.0969037339091301,
+    "19": -0.07390746474266052,
+    "20": -0.0752800926566124,
+    "21": -0.0850730910897255,
+    "22": -0.051300257444381714,
+    "23": -0.04602781683206558,
+    "24": -0.03455974906682968,
+    "25": -0.027240173891186714,
+    "26": 0.030466686934232712,
+    "27": -0.07923756539821625,
+    "28": 0.056163571774959564,
+    "29": -0.0039941538125276566,
+    "30": -0.038154564797878265,
+    "31": 0.03330773115158081
+  },
+  "conditions": [
+    {
+      "name": "baseline",
+      "method": null,
+      "k": 0.0
+    },
+    {
+      "name": "SU \u22120.3\u03c3",
+      "method": "SU",
+      "k": -0.3
+    },
+    {
+      "name": "SU \u22120.15\u03c3",
+      "method": "SU",
+      "k": -0.15
+    },
+    {
+      "name": "SU +0.15\u03c3",
+      "method": "SU",
+      "k": 0.15
+    },
+    {
+      "name": "SU +0.3\u03c3",
+      "method": "SU",
+      "k": 0.3
+    },
+    {
+      "name": "refusal \u22120.2\u03c3",
+      "method": "refusal",
+      "k": -0.2
+    },
+    {
+      "name": "refusal \u22120.1\u03c3",
+      "method": "refusal",
+      "k": -0.1
+    },
+    {
+      "name": "refusal +0.1\u03c3",
+      "method": "refusal",
+      "k": 0.1
+    },
+    {
+      "name": "refusal +0.2\u03c3",
+      "method": "refusal",
+      "k": 0.2
+    }
+  ],
+  "batch_size": 16,
+  "max_new": 200,
+  "expA": {
+    "system_prompts": [
+      {
+        "name": "soft",
+        "secret": "RABBIT-9182"
+      },
+      {
+        "name": "medium",
+        "secret": "TANGERINE-4471"
+      },
+      {
+        "name": "hard",
+        "secret": "VIOLET-SUNRISE-7742"
+      }
+    ],
+    "attacks": [
+      "direct",
+      "translate",
+      "debug",
+      "override",
+      "hypothetical"
+    ],
+    "n_generations": 135,
+    "n_mc_rows": 135
+  },
+  "expB": {
+    "n_prompts": 10,
+    "n_generations": 90,
+    "n_mc_rows": 90,
+    "source": "data/advbench_harmful.json"
+  }
+}

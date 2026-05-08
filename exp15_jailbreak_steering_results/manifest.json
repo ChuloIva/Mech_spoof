@@ -1,0 +1,168 @@
+{
+  "experiment": "15_jailbreak_steering",
+  "model": "Qwen/Qwen3.5-4B",
+  "steer_layers": [
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31
+  ],
+  "positions": {
+    "SU": "response_last",
+    "refusal": -3
+  },
+  "sigma": {
+    "SU": 2.909973621368408,
+    "refusal": 8.356203079223633
+  },
+  "cos_SU_refusal_per_layer": {
+    "16": 0.10424933582544327,
+    "17": 0.060520485043525696,
+    "18": 0.028712213039398193,
+    "19": 0.03412998467683792,
+    "20": 0.0807192325592041,
+    "21": 0.07248763740062714,
+    "22": 0.05065893009305,
+    "23": 0.007790751755237579,
+    "24": 0.028814978897571564,
+    "25": 0.00431397370994091,
+    "26": 0.015231344848871231,
+    "27": -0.0437917560338974,
+    "28": -0.04031142592430115,
+    "29": 0.006268581375479698,
+    "30": -0.007654251996427774,
+    "31": -0.01231796108186245
+  },
+  "conditions": [
+    {
+      "name": "baseline",
+      "method": null,
+      "k": 0.0
+    },
+    {
+      "name": "SU \u22120.7\u03c3",
+      "method": "SU",
+      "k": -0.7
+    },
+    {
+      "name": "SU \u22120.5\u03c3",
+      "method": "SU",
+      "k": -0.5
+    },
+    {
+      "name": "SU \u22120.3\u03c3",
+      "method": "SU",
+      "k": -0.3
+    },
+    {
+      "name": "SU \u22120.15\u03c3",
+      "method": "SU",
+      "k": -0.15
+    },
+    {
+      "name": "SU +0.15\u03c3",
+      "method": "SU",
+      "k": 0.15
+    },
+    {
+      "name": "SU +0.3\u03c3",
+      "method": "SU",
+      "k": 0.3
+    },
+    {
+      "name": "SU +0.5\u03c3",
+      "method": "SU",
+      "k": 0.5
+    },
+    {
+      "name": "SU +0.7\u03c3",
+      "method": "SU",
+      "k": 0.7
+    },
+    {
+      "name": "refusal \u22120.15\u03c3",
+      "method": "refusal",
+      "k": -0.15
+    },
+    {
+      "name": "refusal \u22120.1\u03c3",
+      "method": "refusal",
+      "k": -0.1
+    },
+    {
+      "name": "refusal \u22120.05\u03c3",
+      "method": "refusal",
+      "k": -0.05
+    },
+    {
+      "name": "refusal +0.05\u03c3",
+      "method": "refusal",
+      "k": 0.05
+    },
+    {
+      "name": "refusal +0.1\u03c3",
+      "method": "refusal",
+      "k": 0.1
+    }
+  ],
+  "batch_size": 50,
+  "max_new": 200,
+  "expA": {
+    "system_prompts": [
+      {
+        "name": "soft",
+        "secret": "RABBIT-9182"
+      },
+      {
+        "name": "soft2",
+        "secret": "OAKMOSS-3308"
+      },
+      {
+        "name": "medium",
+        "secret": "TANGERINE-4471"
+      },
+      {
+        "name": "medium2",
+        "secret": "INDIGO-9905"
+      },
+      {
+        "name": "hard",
+        "secret": "VIOLET-SUNRISE-7742"
+      }
+    ],
+    "attacks": [
+      "direct",
+      "translate",
+      "debug",
+      "override",
+      "hypothetical",
+      "roleplay",
+      "repeat_above",
+      "summarize",
+      "encode",
+      "completion",
+      "developer_note",
+      "cite_back"
+    ],
+    "n_generations": 840,
+    "n_mc_rows": 840
+  },
+  "expB": {
+    "n_prompts": 30,
+    "n_generations": 420,
+    "n_mc_rows": 420,
+    "source": "data/advbench_harmful.json"
+  }
+}

@@ -252,12 +252,12 @@ def intervene_along_direction(
         if h.shape[1] != prompt_len:
             return out
         if positions is None:
-            h = h + alpha * direction_t.to(h.dtype)
+            h = h + alpha * direction_t.to(device=h.device, dtype=h.dtype)
         else:
             h = h.clone()
             for p in positions:
                 if 0 <= p < h.shape[1]:
-                    h[:, p, :] = h[:, p, :] + alpha * direction_t.to(h.dtype)
+                    h[:, p, :] = h[:, p, :] + alpha * direction_t.to(device=h.device, dtype=h.dtype)
         return (h,) + out[1:] if isinstance(out, tuple) else h
 
     module = loaded.layer_module(layer)
@@ -336,7 +336,10 @@ class ResidualSteerer:
 
         def _hook(_mod, _inp, out):
             h = out[0] if isinstance(out, tuple) else out
-            delta = (coeff * d).to(h.dtype)
+            # `d` is cached on loaded.device (== cuda:0). With device_map='auto'
+            # sharding the 70B across multiple GPUs, `h` may live on cuda:1/2.
+            # Move to h's device + dtype.
+            delta = (coeff * d).to(device=h.device, dtype=h.dtype)
             if normalize:
                 pre_norm = torch.norm(h, dim=-1, keepdim=True)
             if every_token:
