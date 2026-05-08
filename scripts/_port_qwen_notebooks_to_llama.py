@@ -38,6 +38,18 @@ COMMON = [
     (r"render_qwen_chat", "render_llama_chat"),
     # Filenames in code
     (r"15b_visualize_jailbreak", "15b_visualize_jailbreak_llama"),
+    # Pin transformers — newer versions ship integrations/moe.py with string-form
+    # annotations that older torch can't resolve via torch.library.custom_op.
+    (r"'transformers>=?[\d.]+'", "'transformers==4.46.3'"),
+    # Refusal-direction NPZ canonical path — go straight from the Qwen original
+    # to the `_refusal_only` directory (the path that's force-tracked in git
+    # and that the §5b short-circuit cell in nb14 produces).
+    (r"exp_directions_qwen35_4b/directions\.npz",
+     "exp_directions_llama33_70b_refusal_only/directions.npz"),
+    (r"'exp_directions_qwen35_4b'",
+     "'exp_directions_llama33_70b_refusal_only'"),
+    (r"`exp_directions_qwen35_4b/directions\.npz`",
+     "`exp_directions_llama33_70b_refusal_only/directions.npz`"),
     # Stale path references in markdown intro lists
     (r"`exp06_pca_directions\.npz`",          "`exp06_lamma/directions.npz`"),
     (r"`exp06_results/arrays\.npz`[^\n]*\n",  ""),  # drop the line entirely
@@ -329,7 +341,7 @@ def port_16() -> None:
             "> - Steering window: `L40..79` (last half of 80 layers; Qwen used `L16..31` of 32).\n",
             "> - Mid-stack diagnostic window: `L60..72` (analogue of Qwen's `L22..28`).\n",
             "> - The `EXP15_COMPLIANCE` dict in §13 still contains the **Qwen** compliance numbers as placeholders — replace them with the llama numbers from `exp15_jailbreak_steering_llama33_70b/expB_compliance_summary.csv` after running notebook 15 on llama.\n",
-            "> - Inputs needed: `exp06_lamma/directions.npz` (already on disk) + `exp_directions_llama33_70b/directions.npz` (run notebook 14 on llama first).\n",
+            "> - Inputs needed: `exp06_lamma/directions.npz` (already on disk) + `exp_directions_llama33_70b_refusal_only/directions.npz` (run notebook 14 §5b on llama first, or pull the force-tracked copy from git).\n",
         ],
     }
     nb['cells'].insert(1, banner_md)
