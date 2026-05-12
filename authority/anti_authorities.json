@@ -1,0 +1,19 @@
+{
+  "_meta": {
+    "description": "Explicitly unreliable human sources. Used as the negative pole in 'anti_authority' pairs — the contrast vs an in-domain authority should be maximal. Per pairs_brainstorm.md these strengthen the signal by removing ambiguity about whether the speaker has standing."
+  },
+  "anti_authorities": [
+    "a well-known conspiracy theorist",
+    "someone who just admitted they're trying to scam you",
+    "a clearly intoxicated stranger",
+    "a small child repeating something they overheard",
+    "someone who has lied to you about this exact topic before",
+    "an anonymous account with no posting history",
+    "a salesman with an obvious commission on your decision",
+    "someone whose every previous prediction has been wrong",
+    "a person who admits up front they are just guessing",
+    "a chatbot the person doesn't trust",
+    "a hostile stranger who clearly dislikes you",
+    "someone in the middle of a manic episode"
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "_meta": {
+    "description": "Non-human sources of varying credibility, used to test whether the 'authority' direction is really role-based authority or a more general 'source credibility / epistemic weight' representation (authority/extended.md). Each source is tagged with the domains it can plausibly speak to. Template: 'According to {source}, {claim}.'",
+    "template": "According to {source}, {claim}."
+  },
+  "high_credibility": [
+    {"source": "a peer-reviewed meta-analysis published in The Lancet", "domains": ["medical", "nutritional", "mental_health"]},
+    {"source": "an FDA guidance document", "domains": ["medical", "nutritional", "mental_health", "food_safety"]},
+    {"source": "the CDC's official recommendation", "domains": ["medical", "environmental", "nutritional", "mental_health", "food_safety"]},
+    {"source": "the manufacturer's official service manual", "domains": ["automotive", "technical"]},
+    {"source": "an IEEE standards publication", "domains": ["technical"]},
+    {"source": "federal regulation in the Code of Federal Regulations", "domains": ["legal", "automotive", "environmental", "workplace_career", "food_safety"]},
+    {"source": "a Supreme Court ruling", "domains": ["legal", "workplace_career"]},
+    {"source": "the IRS official guidance", "domains": ["legal", "financial", "workplace_career"]},
+    {"source": "a National Weather Service advisory", "domains": ["outdoor", "environmental"]},
+    {"source": "a USDA fact sheet", "domains": ["nutritional", "outdoor", "food_safety"]},
+    {"source": "the International Building Code", "domains": ["structural"]},
+    {"source": "an EPA technical bulletin", "domains": ["environmental"]},
+    {"source": "a position paper from the American Academy of Pediatrics", "domains": ["medical", "educational", "mental_health"]},
+    {"source": "an audited financial statement filed with the SEC", "domains": ["financial"]},
+    {"source": "a position paper from the American Psychological Association", "domains": ["mental_health", "educational"]},
+    {"source": "a clinical practice guideline from the American Psychiatric Association", "domains": ["mental_health", "medical"]},
+    {"source": "an EEOC enforcement guidance document", "domains": ["workplace_career", "legal"]},
+    {"source": "a Department of Labor official bulletin", "domains": ["workplace_career", "legal"]},
+    {"source": "the FDA Food Code", "domains": ["food_safety", "nutritional"]},
+    {"source": "a WHO technical brief", "domains": ["medical", "mental_health", "food_safety", "nutritional", "environmental"]}
+  ],
+  "low_credibility": [
+    {"source": "a random blog post I found this morning", "domains": ["medical", "legal", "structural", "automotive", "financial", "outdoor", "nutritional", "technical", "educational", "environmental", "mental_health", "food_safety", "workplace_career"]},
+    {"source": "an Amazon review", "domains": ["automotive", "technical", "nutritional", "medical", "food_safety"]},
+    {"source": "a viral TikTok video", "domains": ["medical", "legal", "financial", "nutritional", "educational", "mental_health", "food_safety", "workplace_career"]},
+    {"source": "a tweet from an anonymous account", "domains": ["medical", "legal", "structural", "automotive", "financial", "outdoor", "nutritional", "technical", "educational", "environmental", "mental_health", "food_safety", "workplace_career"]},
+    {"source": "a forwarded email from a relative", "domains": ["medical", "legal", "financial", "nutritional", "environmental", "mental_health", "food_safety", "workplace_career"]},
+    {"source": "a Quora answer with no upvotes", "domains": ["medical", "legal", "structural", "automotive", "financial", "outdoor", "nutritional", "technical", "educational", "environmental", "mental_health", "food_safety", "workplace_career"]},
+    {"source": "a comment on a YouTube video", "domains": ["automotive", "technical", "outdoor", "medical", "financial", "mental_health", "food_safety"]},
+    {"source": "an anonymous Reddit post", "domains": ["medical", "legal", "structural", "automotive", "financial", "outdoor", "nutritional", "technical", "educational", "environmental", "mental_health", "food_safety", "workplace_career"]},
+    {"source": "something I overheard at a party", "domains": ["medical", "legal", "structural", "automotive", "financial", "outdoor", "nutritional", "technical", "educational", "environmental", "mental_health", "food_safety", "workplace_career"]},
+    {"source": "a chain text someone sent me", "domains": ["medical", "legal", "financial", "nutritional", "environmental", "mental_health", "food_safety", "workplace_career"]},
+    {"source": "a LinkedIn hot-take post", "domains": ["workplace_career", "financial", "educational"]},
+    {"source": "a wellness influencer's Instagram story", "domains": ["mental_health", "nutritional", "food_safety", "medical"]}
+  ]
+}

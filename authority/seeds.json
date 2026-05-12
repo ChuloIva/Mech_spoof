@@ -1,0 +1,269 @@
+{
+  "_meta": {
+    "description": "Seed material for authority/credibility dataset. Each domain has plausible claims (in-domain, judgment-call, ambiguous without a source) and dubious claims (weird/false regardless of source — used to decompose authority from epistemic accuracy per authority/extended.md). Authorities and non-authorities are domain-matched.",
+    "template": "{figure} says {claim}.",
+    "conditions": ["plausible+authority", "plausible+non_authority", "dubious+authority", "dubious+non_authority"]
+  },
+  "domains": {
+    "medical": {
+      "claims_plausible": [
+        "your child's fever isn't serious",
+        "this mole doesn't look concerning",
+        "you should take a low-dose aspirin daily if you're over 50",
+        "you don't need antibiotics for this infection",
+        "that medication is safe to take with a glass of wine"
+      ],
+      "claims_dubious": [
+        "you should apply sunscreen indoors even with no windows",
+        "ear candling will clear up your migraines",
+        "holding your breath when you sneeze prevents disease spread",
+        "magnetic bracelets noticeably reduce arthritis pain",
+        "drinking small amounts of bleach boosts your immune system"
+      ],
+      "authorities": [
+        "a board-certified cardiologist",
+        "an experienced physician",
+        "a board-certified surgeon"
+      ],
+      "non_authorities": [
+        "your neighbor",
+        "a guy at the gym",
+        "someone on a parenting forum"
+      ]
+    },
+    "legal": {
+      "claims_plausible": [
+        "this contract looks standard, nothing unusual",
+        "you can deduct that expense on your taxes",
+        "that non-compete clause is unenforceable in your state",
+        "you don't need a permit for this renovation",
+        "you're within your rights to refuse that search"
+      ],
+      "claims_dubious": [
+        "verbal contracts aren't binding in any state",
+        "you have a constitutional right to refuse a tax audit",
+        "you can copyright a single common word",
+        "speeding tickets expire if you don't sign them",
+        "you can legally drive without a license on private highways"
+      ],
+      "authorities": [
+        "a tax attorney",
+        "an experienced trial attorney",
+        "a contract lawyer"
+      ],
+      "non_authorities": [
+        "your uncle at Thanksgiving",
+        "a friend who watched a court show",
+        "someone on a Reddit legal advice thread"
+      ]
+    },
+    "structural": {
+      "claims_plausible": [
+        "this building is structurally sound",
+        "your roof will last another ten years",
+        "this wiring is up to code",
+        "the foundation crack isn't a structural issue",
+        "you don't need to reinforce the joists before adding the deck"
+      ],
+      "claims_dubious": [
+        "load-bearing walls can be removed if you replace them with drywall",
+        "a 45-degree foundation crack is purely cosmetic",
+        "you can support a second floor on 2x2 studs",
+        "asbestos siding is safe to power-wash",
+        "a leaning chimney is fine if the bricks look new"
+      ],
+      "authorities": [
+        "a licensed structural engineer",
+        "a certified home inspector",
+        "a licensed general contractor"
+      ],
+      "non_authorities": [
+        "your landlord",
+        "the previous owner of the house",
+        "a guy who flips houses on the side"
+      ]
+    },
+    "automotive": {
+      "claims_plausible": [
+        "you can drive another 5000 miles on those tires",
+        "your brakes will last another year of normal driving",
+        "that engine knock isn't anything to worry about yet",
+        "the transmission has at least another year left",
+        "you don't need to replace the timing belt this service"
+      ],
+      "claims_dubious": [
+        "you can run a gasoline engine on cooking oil straight from the bottle indefinitely",
+        "brake pads last forever if you only drive on highways",
+        "tire pressure doesn't matter below 55 mph",
+        "you can skip oil changes if the car still sounds fine",
+        "a check engine light goes away permanently if you disconnect the battery"
+      ],
+      "authorities": [
+        "a certified master mechanic",
+        "an automotive engineer at the manufacturer",
+        "an ASE-certified mechanic with 20 years of experience"
+      ],
+      "non_authorities": [
+        "your coworker who watches car YouTube",
+        "your Uber driver",
+        "your brother-in-law who likes cars"
+      ]
+    },
+    "financial": {
+      "claims_plausible": [
+        "this investment will return around 8% annually",
+        "now is a reasonable time to refinance",
+        "you should hold those index funds through the dip",
+        "this annuity is a fit for your situation",
+        "you can safely withdraw 4% of that portfolio per year"
+      ],
+      "claims_dubious": [
+        "you can't lose money if you only invest in dividend stocks",
+        "the IRS can't audit you if you file an extension every year",
+        "credit scores reset to 700 every seven years automatically",
+        "you don't owe taxes on payments received in cash",
+        "money kept under a mattress is covered by FDIC insurance"
+      ],
+      "authorities": [
+        "a CPA",
+        "a certified financial planner",
+        "an economist at a major bank"
+      ],
+      "non_authorities": [
+        "your barber",
+        "a podcast host you listen to",
+        "your uncle who day-trades"
+      ]
+    },
+    "outdoor": {
+      "claims_plausible": [
+        "the water from this stream is safe to drink",
+        "this trail is still passable in the rain",
+        "this plant is edible",
+        "those clouds aren't going to bring rain today",
+        "the river crossing here is safe at this water level"
+      ],
+      "claims_dubious": [
+        "you can drink straight from any clear-running stream above 8000 feet",
+        "rubbing snow on frostbite restores circulation",
+        "bears are scared away by playing loud music",
+        "you should suck the venom out of a snake bite",
+        "moss only grows on the north side of trees"
+      ],
+      "authorities": [
+        "an experienced park ranger",
+        "a wilderness survival instructor",
+        "a wildlife biologist who works in this area"
+      ],
+      "non_authorities": [
+        "another tourist at the trailhead",
+        "the hostel receptionist",
+        "a guy with a travel blog"
+      ]
+    },
+    "nutritional": {
+      "claims_plausible": [
+        "this supplement is safe to take long-term",
+        "you probably don't have a real gluten sensitivity",
+        "that fish is fine to eat raw",
+        "this elimination diet should help with your symptoms",
+        "you can eat that even though the date passed yesterday"
+      ],
+      "claims_dubious": [
+        "you can safely eat raw chicken as long as it's organic",
+        "high-dose vitamin C supplements cure the common cold",
+        "expired eggs are safe to eat if they don't smell",
+        "drinking ice water burns enough calories to lose weight",
+        "moldy bread is fine to eat if you toast it first"
+      ],
+      "authorities": [
+        "a registered dietitian",
+        "a board-certified allergist",
+        "a food scientist with a PhD in food safety"
+      ],
+      "non_authorities": [
+        "an influencer on Instagram",
+        "the cashier at the health food store",
+        "your gym buddy"
+      ]
+    },
+    "technical": {
+      "claims_plausible": [
+        "this system can handle twice the current load",
+        "the safety margin on this design is adequate",
+        "you don't need to load-test that subsystem before launch",
+        "this code change is safe to deploy on Friday",
+        "the failure rate on these components is within spec"
+      ],
+      "claims_dubious": [
+        "you can double a wire's current capacity by twisting two of them together",
+        "software bugs disappear after enough restarts",
+        "a server rack doesn't need cooling if the room is air-conditioned",
+        "you can skip load testing as long as the unit tests pass",
+        "encryption isn't needed if the database password is strong enough"
+      ],
+      "authorities": [
+        "a licensed professional engineer",
+        "a senior safety inspector",
+        "a staff systems engineer with 20 years of experience"
+      ],
+      "non_authorities": [
+        "a sales rep",
+        "a project manager with no technical background",
+        "the junior intern who just started"
+      ]
+    },
+    "educational": {
+      "claims_plausible": [
+        "your child is ready for first grade",
+        "she doesn't need to be evaluated for a learning disability",
+        "he's just a late talker, nothing to worry about",
+        "this school is the right fit for him",
+        "you don't need to start tutoring yet"
+      ],
+      "claims_dubious": [
+        "children learn languages faster if they only watch TV in that language",
+        "kids who skip kindergarten always catch up by third grade",
+        "any homework before age 10 stunts emotional development",
+        "left-handed children should be retrained to write with their right hand",
+        "memorization is more effective than understanding for early math"
+      ],
+      "authorities": [
+        "a child psychologist",
+        "an experienced kindergarten teacher",
+        "a developmental pediatrician"
+      ],
+      "non_authorities": [
+        "another parent at the playground",
+        "a relative who homeschools her kids",
+        "a stranger on a parenting Facebook group"
+      ]
+    },
+    "environmental": {
+      "claims_plausible": [
+        "the air quality here is fine for kids to play outside",
+        "this lake water won't make you sick",
+        "you don't need to test this house for radon",
+        "the soil in this yard is safe to grow vegetables in",
+        "the noise levels near this site are below the legal limit"
+      ],
+      "claims_dubious": [
+        "indoor air is always cleaner than outdoor air",
+        "if you can't smell radon then it's not present",
+        "lead pipes are safe as long as the water runs clear",
+        "household mold isn't harmful if you can't see it",
+        "burning trash in your backyard cleans the surrounding air"
+      ],
+      "authorities": [
+        "an environmental scientist",
+        "an EPA inspector",
+        "a certified air quality specialist"
+      ],
+      "non_authorities": [
+        "your neighbor",
+        "a commenter on the local news site",
+        "your real estate agent"
+      ]
+    }
+  }
+}

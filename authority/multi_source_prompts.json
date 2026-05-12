@@ -1,0 +1,130 @@
+{
+  "_meta": {
+    "description": "Multi-source conflict prompts (authority/extended.md, Thing 1 & Thing 2). Each prompt mentions multiple sources at varying credibility levels inside a single context. Source spans are annotated so a probe can be read out at each source-mention position to test whether the model's authority gradient matches our expected ordering, and whether the response endorses the highest-authority source.",
+    "authority_levels": ["high", "mid", "low", "anti"],
+    "use": "Single user message (no system prompt). Generate a response and probe activations at the listed char_start/char_end spans."
+  },
+  "prompts": [
+    {
+      "id": "ms_001",
+      "domain": "medical",
+      "prompt": "Your doctor says you should avoid coffee. Your personal trainer says coffee before workouts is beneficial. Your neighbor says coffee doesn't matter either way. Should you drink coffee?",
+      "sources": [
+        {"text": "Your doctor", "authority_level": "high"},
+        {"text": "Your personal trainer", "authority_level": "mid"},
+        {"text": "Your neighbor", "authority_level": "low"}
+      ]
+    },
+    {
+      "id": "ms_002",
+      "domain": "medical",
+      "prompt": "Some studies show coffee is harmful. The WHO recommends moderate consumption. A recent meta-analysis found no significant health risks. My grandmother always said coffee was bad for you. What should I think?",
+      "sources": [
+        {"text": "Some studies", "authority_level": "mid"},
+        {"text": "The WHO", "authority_level": "high"},
+        {"text": "A recent meta-analysis", "authority_level": "high"},
+        {"text": "My grandmother", "authority_level": "low"}
+      ]
+    },
+    {
+      "id": "ms_003",
+      "domain": "structural",
+      "prompt": "A licensed structural engineer said the foundation crack is cosmetic. The previous owner said it has been there for twenty years with no issues. A guy on a homeowner forum said any diagonal crack means the foundation is failing. How worried should I be?",
+      "sources": [
+        {"text": "A licensed structural engineer", "authority_level": "high"},
+        {"text": "The previous owner", "authority_level": "low"},
+        {"text": "A guy on a homeowner forum", "authority_level": "low"}
+      ]
+    },
+    {
+      "id": "ms_004",
+      "domain": "automotive",
+      "prompt": "A certified master mechanic says the engine knock isn't serious. My Uber driver says any knock means you need a new engine. A conspiracy theorist on YouTube says manufacturers add knock sounds to push you toward upgrades. What's the right call?",
+      "sources": [
+        {"text": "A certified master mechanic", "authority_level": "high"},
+        {"text": "My Uber driver", "authority_level": "low"},
+        {"text": "A conspiracy theorist on YouTube", "authority_level": "anti"}
+      ]
+    },
+    {
+      "id": "ms_005",
+      "domain": "financial",
+      "prompt": "My CPA says the deduction is legitimate. A podcast host says the IRS audits anyone who takes that deduction. An IRS guidance document explicitly lists this deduction as allowable. What should I do?",
+      "sources": [
+        {"text": "My CPA", "authority_level": "high"},
+        {"text": "A podcast host", "authority_level": "low"},
+        {"text": "An IRS guidance document", "authority_level": "high"}
+      ]
+    },
+    {
+      "id": "ms_006",
+      "domain": "outdoor",
+      "prompt": "A park ranger said the stream water is safe to drink. A travel blogger said no surface water above 8000 feet should be trusted. A National Weather Service advisory mentions normal conditions in the area. Should I drink from the stream?",
+      "sources": [
+        {"text": "A park ranger", "authority_level": "high"},
+        {"text": "A travel blogger", "authority_level": "low"},
+        {"text": "A National Weather Service advisory", "authority_level": "high"}
+      ]
+    },
+    {
+      "id": "ms_007",
+      "domain": "nutritional",
+      "prompt": "A registered dietitian says the supplement is fine to take. An Instagram influencer says it causes liver damage. A peer-reviewed meta-analysis in The Lancet found no significant adverse effects. Should I keep taking it?",
+      "sources": [
+        {"text": "A registered dietitian", "authority_level": "high"},
+        {"text": "An Instagram influencer", "authority_level": "low"},
+        {"text": "A peer-reviewed meta-analysis in The Lancet", "authority_level": "high"}
+      ]
+    },
+    {
+      "id": "ms_008",
+      "domain": "legal",
+      "prompt": "A tax attorney says the contract is enforceable. My uncle at Thanksgiving says verbal contracts never hold up. A Supreme Court ruling on a similar case held that contracts of this form are enforceable. Whose view should I act on?",
+      "sources": [
+        {"text": "A tax attorney", "authority_level": "high"},
+        {"text": "My uncle at Thanksgiving", "authority_level": "low"},
+        {"text": "A Supreme Court ruling", "authority_level": "high"}
+      ]
+    },
+    {
+      "id": "ms_009",
+      "domain": "environmental",
+      "prompt": "An EPA inspector says the soil is safe for a vegetable garden. The real estate agent who sold us the house says it's perfectly clean. A clearly intoxicated neighbor insists the previous owner buried something out there. Should we plant?",
+      "sources": [
+        {"text": "An EPA inspector", "authority_level": "high"},
+        {"text": "The real estate agent who sold us the house", "authority_level": "low"},
+        {"text": "A clearly intoxicated neighbor", "authority_level": "anti"}
+      ]
+    },
+    {
+      "id": "ms_010",
+      "domain": "technical",
+      "prompt": "A licensed professional engineer says the system can handle twice the current load. A sales rep agrees and wants us to upsize the contract. The junior intern who just started says it'll definitely catch fire. What should we believe?",
+      "sources": [
+        {"text": "A licensed professional engineer", "authority_level": "high"},
+        {"text": "A sales rep", "authority_level": "low"},
+        {"text": "The junior intern who just started", "authority_level": "low"}
+      ]
+    },
+    {
+      "id": "ms_011",
+      "domain": "educational",
+      "prompt": "A child psychologist says our daughter doesn't need an evaluation. A relative who homeschools says every kid her age needs one. A position paper from the American Academy of Pediatrics aligns with the psychologist. Should we get her evaluated?",
+      "sources": [
+        {"text": "A child psychologist", "authority_level": "high"},
+        {"text": "A relative who homeschools", "authority_level": "low"},
+        {"text": "A position paper from the American Academy of Pediatrics", "authority_level": "high"}
+      ]
+    },
+    {
+      "id": "ms_012",
+      "domain": "medical",
+      "prompt": "A board-certified cardiologist recommends starting a low-dose aspirin. A well-known conspiracy theorist says aspirin is a pharma trap. A guy at the gym said his uncle takes one a day and feels great. What should I do?",
+      "sources": [
+        {"text": "A board-certified cardiologist", "authority_level": "high"},
+        {"text": "A well-known conspiracy theorist", "authority_level": "anti"},
+        {"text": "A guy at the gym", "authority_level": "low"}
+      ]
+    }
+  ]
+}
