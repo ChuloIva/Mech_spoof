@@ -26,6 +26,15 @@ env/
 # Results & caches (regenerable)
 results/
 cache/
+exp15_jailbreak_steering/
+exp15_jailbreak_steering_llama33_70b/
+exp15_jailbreak_steering_results/
+exp15_results/
+exp15_results_latest_same_magnit/
+exp15_jailbreak_steering (1)/
+exp15_jailbreak_steering (2)/
+exp15_jailbreak_steering_llama33_70b 2/
+exp15_results (1)/
 *.pkl
 *.safetensors
 *.npy
